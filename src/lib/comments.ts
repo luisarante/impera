@@ -1,12 +1,11 @@
 /**
- * Camada de acesso aos COMENTÁRIOS dos jogadores.
+ * Camada de acesso aos COMENTÁRIOS dos jogadores (página do elenco).
  *
- * Hoje é um stub: `COMMENTS_ENABLED = false` e a UI mostra o estado "em breve".
- * Quando o banco de dados estiver no ar, basta:
- *   1. virar `COMMENTS_ENABLED` para `true`;
- *   2. implementar `fetchComments` / `postComment` apontando para a sua API.
- * Nenhum componente precisa mudar — eles já consomem estas funções.
+ * Lê/grava na tabela `player_comments` do Supabase. A torcida (visitante anônimo)
+ * pode ler e publicar; só o admin logado pode apagar (ver migração 004 / RLS).
+ * Os componentes (PlayerModal) já consomem estas funções — nada muda neles.
  */
+import { supabase } from './supabase'
 
 export interface PlayerComment {
   id: string
@@ -22,29 +21,41 @@ export interface NewComment {
   body: string
 }
 
-/** Vire para `true` quando o backend de comentários estiver disponível. */
-export const COMMENTS_ENABLED: boolean = false
+/** Comentários habilitados (banco no ar). */
+export const COMMENTS_ENABLED = true
 
-/** Busca os comentários de um jogador. */
+function mapComment(row: Record<string, unknown>): PlayerComment {
+  return {
+    id: row.id as string,
+    playerId: row.player_id as string,
+    author: row.author as string,
+    body: row.body as string,
+    createdAt: row.created_at as string,
+  }
+}
+
+/** Busca os comentários de um jogador, do mais novo para o mais antigo. */
 export async function fetchComments(playerId: string): Promise<PlayerComment[]> {
-  if (!COMMENTS_ENABLED) return []
-  // TODO(backend): trocar pela chamada real ao banco de dados.
-  const res = await fetch(`/api/players/${encodeURIComponent(playerId)}/comments`)
-  if (!res.ok) throw new Error('Falha ao carregar comentários.')
-  return res.json()
+  const { data, error } = await supabase
+    .from('player_comments')
+    .select('*')
+    .eq('player_id', playerId)
+    .order('created_at', { ascending: false })
+  if (error) throw new Error('Falha ao carregar comentários.')
+  return (data ?? []).map(mapComment)
 }
 
 /** Publica um novo comentário (pessoa real) sobre um jogador. */
 export async function postComment(input: NewComment): Promise<PlayerComment> {
-  if (!COMMENTS_ENABLED) {
-    throw new Error('Comentários ainda não disponíveis — aguardando o banco de dados.')
-  }
-  // TODO(backend): trocar pelo POST real ao banco de dados.
-  const res = await fetch(`/api/players/${encodeURIComponent(input.playerId)}/comments`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(input),
-  })
-  if (!res.ok) throw new Error('Falha ao publicar o comentário.')
-  return res.json()
+  const author = input.author.trim().slice(0, 40)
+  const body = input.body.trim().slice(0, 500)
+  if (!author || !body) throw new Error('Preencha nome e comentário.')
+
+  const { data, error } = await supabase
+    .from('player_comments')
+    .insert({ player_id: input.playerId, author, body })
+    .select()
+    .single()
+  if (error) throw new Error('Falha ao publicar o comentário.')
+  return mapComment(data as Record<string, unknown>)
 }

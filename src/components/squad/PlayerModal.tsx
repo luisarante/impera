@@ -175,6 +175,7 @@ function FichaTab({ player }: { player: Player }) {
 function CommentsTab({ player }: { player: Player }) {
   const [comments, setComments] = useState<PlayerComment[]>([])
   const [loading, setLoading] = useState(true)
+  const [composing, setComposing] = useState(false)
   const [author, setAuthor] = useState('')
   const [body, setBody] = useState('')
   const [posting, setPosting] = useState(false)
@@ -192,6 +193,13 @@ function CommentsTab({ player }: { player: Player }) {
     }
   }, [player.id])
 
+  function resetComposer() {
+    setComposing(false)
+    setAuthor('')
+    setBody('')
+    setError(null)
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!author.trim() || !body.trim()) return
@@ -200,7 +208,7 @@ function CommentsTab({ player }: { player: Player }) {
     try {
       const created = await postComment({ playerId: player.id, author: author.trim(), body: body.trim() })
       setComments((prev) => [created, ...prev])
-      setBody('')
+      resetComposer()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Falha ao publicar.')
     } finally {
@@ -220,37 +228,11 @@ function CommentsTab({ player }: { player: Player }) {
         </div>
       )}
 
-      {COMMENTS_ENABLED && (
-        <form className="comments__form" onSubmit={handleSubmit}>
-          <input
-            className="comments__input"
-            placeholder="Seu nome"
-            value={author}
-            onChange={(e) => setAuthor(e.target.value)}
-            maxLength={40}
-          />
-          <textarea
-            className="comments__textarea"
-            placeholder={`O que você acha do ${player.name}?`}
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            maxLength={500}
-            rows={3}
-          />
-          <div className="comments__formfoot">
-            {error && <span className="comments__error">{error}</span>}
-            <button type="submit" className="comments__submit" disabled={posting}>
-              {posting ? 'Enviando…' : 'Comentar'}
-            </button>
-          </div>
-        </form>
-      )}
-
       <div className="comments__list">
         {loading ? (
           <p className="comments__hint">Carregando…</p>
         ) : comments.length === 0 ? (
-          <p className="comments__hint">Ainda não há comentários. Seja o primeiro quando abrir!</p>
+          <p className="comments__hint">Ainda não há comentários. Seja o primeiro!</p>
         ) : (
           comments.map((c) => (
             <article key={c.id} className="comment">
@@ -265,6 +247,57 @@ function CommentsTab({ player }: { player: Player }) {
           ))
         )}
       </div>
+
+      {COMMENTS_ENABLED &&
+        (composing ? (
+          <form className="comments__form" onSubmit={handleSubmit}>
+            <textarea
+              className="comments__textarea"
+              placeholder={`O que você acha do ${player.name}?`}
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              maxLength={500}
+              rows={3}
+              autoFocus
+            />
+            <label className="comments__label">
+              <span>Como você quer assinar?</span>
+              <input
+                className="comments__input"
+                placeholder="Seu nome"
+                value={author}
+                onChange={(e) => setAuthor(e.target.value)}
+                maxLength={40}
+              />
+            </label>
+            <div className="comments__formfoot">
+              {error && <span className="comments__error">{error}</span>}
+              <button
+                type="button"
+                className="comments__cancel"
+                onClick={resetComposer}
+                disabled={posting}
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                className="comments__submit"
+                disabled={posting || !author.trim() || !body.trim()}
+              >
+                {posting ? 'Enviando…' : 'Comentar'}
+              </button>
+            </div>
+          </form>
+        ) : (
+          <button
+            type="button"
+            className="comments__add"
+            onClick={() => setComposing(true)}
+          >
+            <span aria-hidden="true">＋</span> Adicionar um novo comentário
+          </button>
+        ))}
     </div>
   )
 }

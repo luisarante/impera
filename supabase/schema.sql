@@ -14,6 +14,7 @@
 -- ---------------------------------------------------------------------------
 -- 0. Limpeza (permite reexecucao)
 -- ---------------------------------------------------------------------------
+drop table if exists public.player_comments cascade;
 drop table if exists public.players      cascade;
 drop table if exists public.news         cascade;
 drop table if exists public.gallery_photos cascade;
@@ -117,6 +118,17 @@ create table public.big_numbers (
   created_at    timestamptz not null default now()
 );
 
+-- Comentarios da torcida sobre os jogadores (pagina do elenco)
+create table public.player_comments (
+  id         uuid primary key default gen_random_uuid(),
+  player_id  text not null references public.players(id) on delete cascade,
+  author     text not null check (char_length(author) between 1 and 40),
+  body       text not null check (char_length(body) between 1 and 500),
+  created_at timestamptz not null default now()
+);
+create index player_comments_player_idx
+  on public.player_comments (player_id, created_at desc);
+
 -- ---------------------------------------------------------------------------
 -- 2. Row Level Security: leitura publica, escrita so autenticada
 -- ---------------------------------------------------------------------------
@@ -136,6 +148,21 @@ begin
       'create policy "write_auth" on public.%I for all to authenticated using (true) with check (true);', t);
   end loop;
 end $$;
+
+-- Comentarios: leitura e insercao por qualquer visitante; apagar so admin (moderacao).
+alter table public.player_comments enable row level security;
+
+drop policy if exists "comments_read_all" on public.player_comments;
+create policy "comments_read_all" on public.player_comments
+  for select using (true);
+
+drop policy if exists "comments_insert_anyone" on public.player_comments;
+create policy "comments_insert_anyone" on public.player_comments
+  for insert to anon, authenticated with check (true);
+
+drop policy if exists "comments_delete_auth" on public.player_comments;
+create policy "comments_delete_auth" on public.player_comments
+  for delete to authenticated using (true);
 
 -- ---------------------------------------------------------------------------
 -- 2.5 Capa unica das noticias: ao marcar uma como capa, desmarca as demais
