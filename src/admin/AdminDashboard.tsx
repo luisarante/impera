@@ -3,6 +3,7 @@ import { PageHeader } from './ui'
 
 const SHORTCUTS = [
   { to: '/admin/elenco', title: 'Elenco', desc: 'Adicionar, editar e remover jogadores e suas fotos.' },
+  { to: '/admin/jogos', title: 'Noites de jogo', desc: 'Partidas, votação de craque e eventos de cada noite.' },
   { to: '/admin/galeria', title: 'Galeria', desc: 'Subir e organizar as fotos da galeria do clube.' },
   { to: '/admin/noticias', title: 'Notícias', desc: 'Publicar e editar matérias da SilviaNews.' },
   { to: '/admin/kits', title: 'Kits', desc: 'Uniformes, preços e imagens (frente/costas).' },

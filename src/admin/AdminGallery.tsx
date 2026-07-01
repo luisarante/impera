@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { publicImageUrl, removeImage } from '../lib/supabase'
 import { useTable } from './useTable'
 import { Button, Card, Field, ImageUpload, PageHeader, TextInput } from './ui'
+import { useConfirm, useToast } from './feedback'
 
 interface GalleryRow {
   id: string
@@ -12,6 +13,8 @@ interface GalleryRow {
 }
 
 export default function AdminGallery() {
+  const confirm = useConfirm()
+  const toast = useToast()
   const { rows, loading, error, insert, remove, nextSortOrder } = useTable<GalleryRow>('gallery_photos')
   const [path, setPath] = useState<string | null>(null)
   const [caption, setCaption] = useState('')
@@ -25,21 +28,28 @@ export default function AdminGallery() {
       setPath(null)
       setCaption('')
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Falha ao adicionar.')
+      toast(err instanceof Error ? err.message : 'Falha ao adicionar.', 'error')
     } finally {
       setSaving(false)
     }
   }
 
   async function del(row: GalleryRow) {
-    if (!confirm('Remover esta foto?')) return
+    const ok = await confirm({
+      title: 'Remover foto',
+      message: 'Remover esta foto da galeria?',
+      danger: true,
+      confirmLabel: 'Remover',
+    })
+    if (!ok) return
     try {
       await remove(row.id)
       // Só apaga o arquivo se estiver no bucket próprio da galeria
       // (fotos do seed reaproveitam outros buckets — não devem ser apagadas).
       if (row.bucket === 'gallery') void removeImage('gallery', row.image_path)
+      toast('Foto removida.', 'success')
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Falha ao remover.')
+      toast(err instanceof Error ? err.message : 'Falha ao remover.', 'error')
     }
   }
 

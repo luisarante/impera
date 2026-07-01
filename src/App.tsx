@@ -1,6 +1,5 @@
 import { Routes, Route } from 'react-router-dom'
 import { lazy, Suspense, type ReactNode } from 'react'
-import Cursor from './components/Cursor'
 import ClubDataGate from './components/ClubDataGate'
 import Home from './components/Home'
 import SquadPage from './components/squad/SquadPage'
@@ -8,6 +7,7 @@ import PlayerPage from './components/squad/PlayerPage'
 import GalleryPage from './components/gallery/GalleryPage'
 import NewsPage from './components/news/NewsPage'
 import NewsArticlePage from './components/news/NewsArticlePage'
+import GamesPage from './components/games/GamesPage'
 import { AuthProvider } from './admin/auth'
 import RequireAuth from './admin/RequireAuth'
 
@@ -23,15 +23,11 @@ const AdminKits = lazy(() => import('./admin/AdminKits'))
 const AdminMilestones = lazy(() => import('./admin/AdminMilestones'))
 const AdminBigNumbers = lazy(() => import('./admin/AdminBigNumbers'))
 const AdminClub = lazy(() => import('./admin/AdminClub'))
+const AdminGames = lazy(() => import('./admin/AdminGames'))
 
-/** Páginas públicas: cursor custom + gate que aguarda o conteúdo do banco. */
+/** Páginas públicas: gate que aguarda o conteúdo do banco. */
 function Public({ children }: { children: ReactNode }) {
-  return (
-    <>
-      <Cursor />
-      <ClubDataGate>{children}</ClubDataGate>
-    </>
-  )
+  return <ClubDataGate>{children}</ClubDataGate>
 }
 
 const adminFallback = (
@@ -52,6 +48,8 @@ export default function App() {
           <Route path="/galeria" element={<Public><GalleryPage /></Public>} />
           <Route path="/noticias" element={<Public><NewsPage /></Public>} />
           <Route path="/noticias/:id" element={<Public><NewsArticlePage /></Public>} />
+          <Route path="/jogos" element={<Public><GamesPage /></Public>} />
+          <Route path="/jogos/:id" element={<Public><GamesPage /></Public>} />
 
           {/* Painel admin */}
           <Route path="/admin/login" element={<AdminLogin />} />
@@ -65,6 +63,7 @@ export default function App() {
           >
             <Route index element={<AdminDashboard />} />
             <Route path="elenco" element={<AdminPlayers />} />
+            <Route path="jogos" element={<AdminGames />} />
             <Route path="galeria" element={<AdminGallery />} />
             <Route path="noticias" element={<AdminNews />} />
             <Route path="kits" element={<AdminKits />} />

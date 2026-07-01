@@ -3,6 +3,7 @@ import type { PositionCode } from '../data/club'
 import { publicImageUrl, removeImage } from '../lib/supabase'
 import { useTable } from './useTable'
 import { Button, Card, Field, ImageUpload, PageHeader, Select, TextArea, TextInput } from './ui'
+import { useConfirm, useToast } from './feedback'
 
 interface PlayerRow {
   id: string
@@ -36,6 +37,8 @@ const blank = (sort_order: number): Partial<PlayerRow> => ({
 })
 
 export default function AdminPlayers() {
+  const confirm = useConfirm()
+  const toast = useToast()
   const { rows, loading, error, insert, update, remove, nextSortOrder } = useTable<PlayerRow>('players')
   const [draft, setDraft] = useState<Partial<PlayerRow> | null>(null)
   const [saving, setSaving] = useState(false)
@@ -51,19 +54,26 @@ export default function AdminPlayers() {
       else await insert(draft)
       setDraft(null)
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Falha ao salvar.')
+      toast(err instanceof Error ? err.message : 'Falha ao salvar.', 'error')
     } finally {
       setSaving(false)
     }
   }
 
   async function del(p: PlayerRow) {
-    if (!confirm(`Remover ${p.name}?`)) return
+    const ok = await confirm({
+      title: 'Remover jogador',
+      message: `Remover ${p.name} do elenco?`,
+      danger: true,
+      confirmLabel: 'Remover',
+    })
+    if (!ok) return
     try {
       await remove(p.id)
       if (p.photo_path) void removeImage('players', p.photo_path)
+      toast('Jogador removido.', 'success')
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Falha ao remover.')
+      toast(err instanceof Error ? err.message : 'Falha ao remover.', 'error')
     }
   }
 

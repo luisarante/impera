@@ -5,6 +5,7 @@ import Image from '@tiptap/extension-image'
 import Link from '@tiptap/extension-link'
 import Youtube from '@tiptap/extension-youtube'
 import { publicImageUrl, uploadImage } from '../lib/supabase'
+import { useToast } from './feedback'
 
 interface RichTextEditorProps {
   value: string
@@ -40,6 +41,7 @@ function ToolButton({
 }
 
 function Toolbar({ editor }: { editor: Editor }) {
+  const toast = useToast()
   const fileRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
 
@@ -50,7 +52,7 @@ function Toolbar({ editor }: { editor: Editor }) {
       const url = publicImageUrl('news', path)
       if (url) editor.chain().focus().setImage({ src: url }).run()
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Falha no upload da imagem.')
+      toast(err instanceof Error ? err.message : 'Falha no upload da imagem.', 'error')
     } finally {
       setUploading(false)
     }

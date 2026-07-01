@@ -66,39 +66,6 @@ html.lenis body {
   overflow: hidden;
 }
 
-/* Cursor custom: esconder o nativo no desktop */
-@media (hover: hover) and (pointer: fine) {
-  body {
-    cursor: none;
-  }
-  a,
-  button,
-  [data-cursor] {
-    cursor: none;
-  }
-
-  /* Painel admin: usa o cursor padrão do navegador (sem cursor custom). */
-  .admin-shell,
-  .admin-shell * {
-    cursor: auto;
-  }
-  .admin-shell a,
-  .admin-shell button,
-  .admin-shell label,
-  .admin-shell select,
-  .admin-shell [role='button'] {
-    cursor: pointer;
-  }
-  .admin-shell input,
-  .admin-shell textarea {
-    cursor: text;
-  }
-  .admin-shell button:disabled,
-  .admin-shell [disabled] {
-    cursor: not-allowed;
-  }
-}
-
 /* Utilidades tipográficas */
 .eyebrow {
   font-family: var(--font-body);
@@ -122,6 +89,21 @@ html.lenis body {
 ::selection {
   background: var(--color-accent);
   color: #000;
+}
+
+/* Elementos clicáveis usam o cursor de mãozinha */
+button,
+a,
+label,
+select,
+summary,
+[role='button'],
+[data-cursor] {
+  cursor: pointer;
+}
+button:disabled,
+[disabled] {
+  cursor: not-allowed;
 }
 
 /* ============================================================
@@ -269,63 +251,6 @@ html.lenis body {
   .home-nav__link.is-active {
     color: var(--color-accent);
   }
-}
-
-/* ============================================================
-   CURSOR CUSTOM
-   ============================================================ */
-.cursor {
-  position: fixed;
-  top: 0;
-  left: 0;
-  z-index: 9999;
-  width: 30px;
-  height: 30px;
-  border: 1px solid rgba(255, 255, 255, 0.6);
-  border-radius: 50%;
-  pointer-events: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: width 0.32s cubic-bezier(0.16, 1, 0.3, 1),
-    height 0.32s cubic-bezier(0.16, 1, 0.3, 1),
-    background-color 0.32s ease, border-color 0.32s ease;
-  will-change: transform;
-  mix-blend-mode: difference;
-}
-
-.cursor--active {
-  width: 88px;
-  height: 88px;
-  background: rgba(0, 150, 64, 0.92);
-  border-color: transparent;
-  mix-blend-mode: normal;
-}
-
-.cursor--down {
-  transform-origin: center;
-}
-.cursor.cursor--down .cursor__label {
-  opacity: 0.6;
-}
-
-.cursor__label {
-  font-family: var(--font-body);
-  font-size: 0.62rem;
-  font-weight: 500;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #fff;
-  white-space: nowrap;
-  text-align: center;
-  line-height: 1.1;
-  opacity: 0;
-  transition: opacity 0.2s ease 0.08s;
-  padding: 0 6px;
-  mix-blend-mode: normal;
-}
-.cursor--active .cursor__label {
-  opacity: 1;
 }
 
 /* ============================================================

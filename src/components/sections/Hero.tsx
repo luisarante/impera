@@ -1,7 +1,9 @@
 import { useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { gsap, ScrollTrigger } from '../../lib/gsap'
 import { useClubData } from '../../lib/data/ClubDataContext'
 import Badge from '../ui/Badge'
+import GhostButton from '../ui/GhostButton'
 
 /**
  * SEÇÃO 1 — HERO cine-minimalista.
@@ -10,6 +12,7 @@ import Badge from '../ui/Badge'
  */
 export default function Hero() {
   const { club, heroUrl } = useClubData()
+  const navigate = useNavigate()
   const sectionRef = useRef<HTMLElement>(null)
   const overlayRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
@@ -105,6 +108,11 @@ export default function Hero() {
         <p className="mt-6 max-w-md text-sm uppercase tracking-[0.32em] text-[var(--text-70)]">
           {club.tagline}
         </p>
+        <div className="mt-8">
+          <GhostButton cursorLabel="Ver jogos" onClick={() => navigate('/jogos')}>
+            Últimos jogos →
+          </GhostButton>
+        </div>
       </div>
 
       {/* Indicador de scroll */}

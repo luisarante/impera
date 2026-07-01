@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useTable } from './useTable'
 import { Button, Card, Field, PageHeader, Select, TextInput } from './ui'
+import { useConfirm, useToast } from './feedback'
 
 interface BigNumberRow {
   id: string
@@ -24,10 +25,26 @@ const blank = (sort_order: number): Partial<BigNumberRow> => ({
 })
 
 export default function AdminBigNumbers() {
+  const confirm = useConfirm()
+  const toast = useToast()
   const { rows, loading, error, insert, update, remove, nextSortOrder } =
     useTable<BigNumberRow>('big_numbers')
   const [draft, setDraft] = useState<Partial<BigNumberRow> | null>(null)
   const [saving, setSaving] = useState(false)
+
+  async function del(b: BigNumberRow) {
+    if (
+      await confirm({
+        title: 'Remover número',
+        message: `Remover "${b.label}"?`,
+        danger: true,
+        confirmLabel: 'Remover',
+      })
+    ) {
+      await remove(b.id)
+      toast('Número removido.', 'success')
+    }
+  }
 
   const set = <K extends keyof BigNumberRow>(key: K, value: BigNumberRow[K]) =>
     setDraft((d) => (d ? { ...d, [key]: value } : d))
@@ -40,7 +57,7 @@ export default function AdminBigNumbers() {
       else await insert(draft)
       setDraft(null)
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Falha ao salvar.')
+      toast(err instanceof Error ? err.message : 'Falha ao salvar.', 'error')
     } finally {
       setSaving(false)
     }
@@ -120,7 +137,7 @@ export default function AdminBigNumbers() {
               <p className="truncate text-sm text-[var(--text-50)]">{b.label}</p>
             </div>
             <Button onClick={() => setDraft(b)}>Editar</Button>
-            <Button variant="danger" onClick={() => confirm('Remover?') && remove(b.id)}>
+            <Button variant="danger" onClick={() => del(b)}>
               ✕
             </Button>
           </Card>

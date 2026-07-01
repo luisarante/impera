@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { removeImage } from '../lib/supabase'
 import { useTable } from './useTable'
 import { Button, Card, Field, ImageUpload, PageHeader, TextArea, TextInput } from './ui'
+import { useConfirm, useToast } from './feedback'
 
 interface KitRow {
   id: string
@@ -29,6 +30,8 @@ const blank = (sort_order: number): Partial<KitRow> => ({
 })
 
 export default function AdminKits() {
+  const confirm = useConfirm()
+  const toast = useToast()
   const { rows, loading, error, insert, update, remove, nextSortOrder } = useTable<KitRow>('kits')
   const [draft, setDraft] = useState<Partial<KitRow> | null>(null)
   const [saving, setSaving] = useState(false)
@@ -44,17 +47,24 @@ export default function AdminKits() {
       else await insert(draft)
       setDraft(null)
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Falha ao salvar.')
+      toast(err instanceof Error ? err.message : 'Falha ao salvar.', 'error')
     } finally {
       setSaving(false)
     }
   }
 
   async function del(k: KitRow) {
-    if (!confirm(`Remover ${k.name}?`)) return
+    const ok = await confirm({
+      title: 'Remover kit',
+      message: `Remover ${k.name}?`,
+      danger: true,
+      confirmLabel: 'Remover',
+    })
+    if (!ok) return
     await remove(k.id)
     if (k.image_path) void removeImage('kits', k.image_path)
     if (k.image_back_path) void removeImage('kits', k.image_back_path)
+    toast('Kit removido.', 'success')
   }
 
   if (draft) {

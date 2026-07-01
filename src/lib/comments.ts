@@ -10,6 +10,7 @@
  * abertas ao público; só o admin apaga comentários (ver migrações 004/005).
  */
 import { supabase } from './supabase'
+import { getVisitorId } from './visitor'
 
 export interface PlayerComment {
   id: string
@@ -37,23 +38,6 @@ export interface NewComment {
 
 /** Comentários habilitados (banco no ar). */
 export const COMMENTS_ENABLED = true
-
-const VISITOR_KEY = 'imperatrice:visitor'
-
-/** Id anônimo e estável deste navegador (para curtidas). */
-export function getVisitorId(): string {
-  try {
-    let id = localStorage.getItem(VISITOR_KEY)
-    if (!id) {
-      id = crypto.randomUUID()
-      localStorage.setItem(VISITOR_KEY, id)
-    }
-    return id
-  } catch {
-    // Storage indisponível (modo privado): id efêmero por sessão.
-    return 'anon-' + Math.random().toString(36).slice(2, 12)
-  }
-}
 
 function toComment(
   row: Record<string, unknown>,

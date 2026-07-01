@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { removeImage } from '../lib/supabase'
 import { useTable } from './useTable'
 import { Button, Card, Field, ImageUpload, PageHeader, TextArea, TextInput } from './ui'
+import { useConfirm, useToast } from './feedback'
 import RichTextEditor from './RichTextEditor'
 
 interface NewsRow {
@@ -36,6 +37,8 @@ const blank = (sort_order: number): Partial<NewsRow> => ({
 })
 
 export default function AdminNews() {
+  const confirm = useConfirm()
+  const toast = useToast()
   const { rows, loading, error, insert, update, remove, nextSortOrder } = useTable<NewsRow>('news')
   const [draft, setDraft] = useState<Partial<NewsRow> | null>(null)
   const [saving, setSaving] = useState(false)
@@ -51,16 +54,23 @@ export default function AdminNews() {
       else await insert(draft)
       setDraft(null)
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Falha ao salvar.')
+      toast(err instanceof Error ? err.message : 'Falha ao salvar.', 'error')
     } finally {
       setSaving(false)
     }
   }
 
   async function del(n: NewsRow) {
-    if (!confirm(`Remover "${n.headline}"?`)) return
+    const ok = await confirm({
+      title: 'Remover notícia',
+      message: `Remover "${n.headline}"?`,
+      danger: true,
+      confirmLabel: 'Remover',
+    })
+    if (!ok) return
     await remove(n.id)
     if (n.cover_path) void removeImage('news', n.cover_path)
+    toast('Notícia removida.', 'success')
   }
 
   if (draft) {

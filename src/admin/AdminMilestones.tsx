@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useTable } from './useTable'
 import { Button, Card, Field, PageHeader, TextArea, TextInput } from './ui'
+import { useConfirm, useToast } from './feedback'
 
 interface MilestoneRow {
   id: string
@@ -18,10 +19,26 @@ const blank = (sort_order: number): Partial<MilestoneRow> => ({
 })
 
 export default function AdminMilestones() {
+  const confirm = useConfirm()
+  const toast = useToast()
   const { rows, loading, error, insert, update, remove, nextSortOrder } =
     useTable<MilestoneRow>('milestones')
   const [draft, setDraft] = useState<Partial<MilestoneRow> | null>(null)
   const [saving, setSaving] = useState(false)
+
+  async function del(m: MilestoneRow) {
+    if (
+      await confirm({
+        title: 'Remover marco',
+        message: `Remover "${m.title}"?`,
+        danger: true,
+        confirmLabel: 'Remover',
+      })
+    ) {
+      await remove(m.id)
+      toast('Marco removido.', 'success')
+    }
+  }
 
   const set = <K extends keyof MilestoneRow>(key: K, value: MilestoneRow[K]) =>
     setDraft((d) => (d ? { ...d, [key]: value } : d))
@@ -34,7 +51,7 @@ export default function AdminMilestones() {
       else await insert(draft)
       setDraft(null)
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Falha ao salvar.')
+      toast(err instanceof Error ? err.message : 'Falha ao salvar.', 'error')
     } finally {
       setSaving(false)
     }
@@ -89,7 +106,7 @@ export default function AdminMilestones() {
               <p className="truncate text-xs text-[var(--text-50)]">{m.date_label}</p>
             </div>
             <Button onClick={() => setDraft(m)}>Editar</Button>
-            <Button variant="danger" onClick={() => confirm('Remover?') && remove(m.id)}>
+            <Button variant="danger" onClick={() => del(m)}>
               ✕
             </Button>
           </Card>

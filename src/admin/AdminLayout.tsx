@@ -1,10 +1,12 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from './auth'
+import { AdminFeedbackProvider } from './feedback'
 import Badge from '../components/ui/Badge'
 
 const NAV = [
   { to: '/admin', label: 'Visão geral', end: true },
   { to: '/admin/elenco', label: 'Elenco' },
+  { to: '/admin/jogos', label: 'Noites de jogo' },
   { to: '/admin/galeria', label: 'Galeria' },
   { to: '/admin/noticias', label: 'Notícias' },
   { to: '/admin/kits', label: 'Kits' },
@@ -24,6 +26,7 @@ export default function AdminLayout() {
   }
 
   return (
+    <AdminFeedbackProvider>
     <div className="admin-shell flex min-h-screen bg-[var(--color-ink)] text-white">
       <aside className="flex w-60 shrink-0 flex-col border-r border-[var(--hairline)] p-6">
         <div className="mb-8 flex items-center gap-3">
@@ -76,5 +79,6 @@ export default function AdminLayout() {
         <Outlet />
       </main>
     </div>
+    </AdminFeedbackProvider>
   )
 }

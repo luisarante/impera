@@ -14,6 +14,12 @@
 -- ---------------------------------------------------------------------------
 -- 0. Limpeza (permite reexecucao)
 -- ---------------------------------------------------------------------------
+drop table if exists public.mvp_votes      cascade;
+drop table if exists public.mvp_candidates cascade;
+drop table if exists public.match_goals    cascade;
+drop table if exists public.matches        cascade;
+drop table if exists public.night_events   cascade;
+drop table if exists public.game_nights    cascade;
 drop table if exists public.comment_likes cascade;
 drop table if exists public.player_comments cascade;
 drop table if exists public.players      cascade;
@@ -360,3 +366,100 @@ insert into public.big_numbers (id, value, numeric_value, prefix, suffix, label,
   ('b1','2',   null, null, null, 'Divisão atual — Pro Clubs', 'gold', 1),
   ('b2','500', 537,  '+',  null, 'Gols na história do clube',  null,   2),
   ('b3','3',   3,    null, null, 'Títulos erguidos',           null,   3);
+
+-- ===========================================================================
+-- 5. NOITES DE JOGO — partidas, craque da noite e eventos (ver migração 006)
+-- ===========================================================================
+create table public.game_nights (
+  id         uuid primary key default gen_random_uuid(),
+  title      text not null,
+  date       date not null default current_date,
+  subtitle   text,
+  mvp_open   boolean not null default true,
+  created_at timestamptz not null default now()
+);
+create index game_nights_date_idx on public.game_nights (date desc, created_at desc);
+
+create table public.matches (
+  id          uuid primary key default gen_random_uuid(),
+  night_id    uuid not null references public.game_nights(id) on delete cascade,
+  opponent    text not null,
+  our_score   int,
+  opp_score   int,
+  competition text,
+  status      text not null default 'encerrada' check (status in ('agendada','ao_vivo','encerrada')),
+  sort_order  int not null default 0,
+  created_at  timestamptz not null default now()
+);
+create index matches_night_idx on public.matches (night_id, sort_order);
+
+create table public.night_events (
+  id          uuid primary key default gen_random_uuid(),
+  night_id    uuid not null references public.game_nights(id) on delete cascade,
+  time_label  text,
+  title       text not null,
+  description text,
+  sort_order  int not null default 0,
+  created_at  timestamptz not null default now()
+);
+create index night_events_night_idx on public.night_events (night_id, sort_order);
+
+create table public.mvp_candidates (
+  id         uuid primary key default gen_random_uuid(),
+  night_id   uuid not null references public.game_nights(id) on delete cascade,
+  player_id  text not null references public.players(id) on delete cascade,
+  sort_order int not null default 0,
+  unique (night_id, player_id)
+);
+create index mvp_candidates_night_idx on public.mvp_candidates (night_id);
+
+create table public.mvp_votes (
+  id         uuid primary key default gen_random_uuid(),
+  night_id   uuid not null references public.game_nights(id) on delete cascade,
+  player_id  text not null references public.players(id) on delete cascade,
+  visitor_id text not null check (char_length(visitor_id) between 8 and 64),
+  created_at timestamptz not null default now(),
+  unique (night_id, visitor_id)
+);
+create index mvp_votes_night_idx on public.mvp_votes (night_id);
+
+-- RLS: conteúdo com leitura pública + escrita admin; votos abertos ao visitante.
+do $$
+declare t text;
+begin
+  foreach t in array array['game_nights','matches','night_events','mvp_candidates']
+  loop
+    execute format('alter table public.%I enable row level security;', t);
+    execute format('drop policy if exists "read_all" on public.%I;', t);
+    execute format('create policy "read_all" on public.%I for select using (true);', t);
+    execute format('drop policy if exists "write_auth" on public.%I;', t);
+    execute format('create policy "write_auth" on public.%I for all to authenticated using (true) with check (true);', t);
+  end loop;
+end $$;
+
+alter table public.mvp_votes enable row level security;
+drop policy if exists "mvp_votes_read_all" on public.mvp_votes;
+create policy "mvp_votes_read_all" on public.mvp_votes for select using (true);
+drop policy if exists "mvp_votes_insert_anyone" on public.mvp_votes;
+create policy "mvp_votes_insert_anyone" on public.mvp_votes for insert to anon, authenticated with check (true);
+drop policy if exists "mvp_votes_update_anyone" on public.mvp_votes;
+create policy "mvp_votes_update_anyone" on public.mvp_votes for update to anon, authenticated using (true) with check (true);
+drop policy if exists "mvp_votes_delete_anyone" on public.mvp_votes;
+create policy "mvp_votes_delete_anyone" on public.mvp_votes for delete to anon, authenticated using (true);
+
+-- Gols do Imperatrice por partida (autores; só elenco, ver migração 007)
+create table public.match_goals (
+  id         uuid primary key default gen_random_uuid(),
+  match_id   uuid not null references public.matches(id) on delete cascade,
+  player_id  text not null references public.players(id) on delete cascade,
+  minute     int,
+  sort_order int not null default 0,
+  created_at timestamptz not null default now()
+);
+create index match_goals_match_idx on public.match_goals (match_id, sort_order);
+
+alter table public.match_goals enable row level security;
+drop policy if exists "match_goals_read_all" on public.match_goals;
+create policy "match_goals_read_all" on public.match_goals for select using (true);
+drop policy if exists "match_goals_write_auth" on public.match_goals;
+create policy "match_goals_write_auth" on public.match_goals for all to authenticated using (true) with check (true);
