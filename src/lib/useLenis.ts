@@ -21,6 +21,7 @@ type ScrollToOpts = {
   duration?: number
   easing?: (t: number) => number
   lock?: boolean
+  offset?: number
   onComplete?: () => void
 }
 
@@ -33,6 +34,25 @@ export function lenisScrollTo(target: number, opts: ScrollToOpts = {}) {
     lenisInstance.scrollTo(target, opts)
   } else {
     window.scrollTo({ top: target, behavior: 'smooth' })
+    opts.onComplete?.()
+  }
+}
+
+/**
+ * Glide suave até um elemento (usado pela navegação da página inicial).
+ * Aceita um seletor CSS ou o próprio elemento. Cai no scroll nativo suave se
+ * o Lenis não existir (ex.: movimento reduzido).
+ */
+export function lenisScrollToEl(target: string | HTMLElement, opts: ScrollToOpts = {}) {
+  if (lenisInstance) {
+    lenisInstance.scrollTo(target, opts)
+  } else {
+    const el =
+      typeof target === 'string' ? document.querySelector<HTMLElement>(target) : target
+    if (el) {
+      const top = el.getBoundingClientRect().top + window.scrollY + (opts.offset ?? 0)
+      window.scrollTo({ top, behavior: 'smooth' })
+    }
     opts.onComplete?.()
   }
 }

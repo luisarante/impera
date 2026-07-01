@@ -13,7 +13,7 @@ export default function GalleryTeaser() {
   const preview = gallery.slice(0, 5)
 
   return (
-    <section className="gallery-teaser">
+    <section id="galeria" className="gallery-teaser">
       <div className="gallery-teaser__mosaic" aria-hidden>
         {preview.map((p) => (
           <div key={p.id} className="gallery-teaser__cell">

@@ -4,8 +4,10 @@ import Cursor from './components/Cursor'
 import ClubDataGate from './components/ClubDataGate'
 import Home from './components/Home'
 import SquadPage from './components/squad/SquadPage'
+import PlayerPage from './components/squad/PlayerPage'
 import GalleryPage from './components/gallery/GalleryPage'
 import NewsPage from './components/news/NewsPage'
+import NewsArticlePage from './components/news/NewsArticlePage'
 import { AuthProvider } from './admin/auth'
 import RequireAuth from './admin/RequireAuth'
 
@@ -46,8 +48,10 @@ export default function App() {
           {/* Site público */}
           <Route path="/" element={<Public><Home /></Public>} />
           <Route path="/elenco" element={<Public><SquadPage /></Public>} />
+          <Route path="/elenco/:id" element={<Public><PlayerPage /></Public>} />
           <Route path="/galeria" element={<Public><GalleryPage /></Public>} />
           <Route path="/noticias" element={<Public><NewsPage /></Public>} />
+          <Route path="/noticias/:id" element={<Public><NewsArticlePage /></Public>} />
 
           {/* Painel admin */}
           <Route path="/admin/login" element={<AdminLogin />} />

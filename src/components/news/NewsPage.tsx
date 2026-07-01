@@ -1,10 +1,8 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { gsap, prefersReducedMotion } from '../../lib/gsap'
 import { useClubData } from '../../lib/data/ClubDataContext'
-import type { NewsItem } from '../../data/club'
 import VerifiedBadge from '../ui/VerifiedBadge'
-import GlassPanel from '../ui/GlassPanel'
 
 function formatDate(iso: string): string {
   if (!iso) return ''
@@ -20,7 +18,6 @@ function formatDate(iso: string): string {
 export default function NewsPage() {
   const navigate = useNavigate()
   const { news, club } = useClubData()
-  const [active, setActive] = useState<NewsItem | null>(null)
   const rootRef = useRef<HTMLDivElement>(null)
 
   const goBack = useCallback(() => navigate('/'), [navigate])
@@ -29,14 +26,14 @@ export default function NewsPage() {
     window.scrollTo(0, 0)
   }, [])
 
-  // Esc volta para a home (quando não há matéria aberta; o painel trata o seu).
+  // Esc volta para a home.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !active) goBack()
+      if (e.key === 'Escape') goBack()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [active, goBack])
+  }, [goBack])
 
   useLayoutEffect(() => {
     if (prefersReducedMotion() || !rootRef.current) return
@@ -79,7 +76,7 @@ export default function NewsPage() {
             <article
               className="news-cover"
               data-cursor="Ler matéria"
-              onClick={() => setActive(cover)}
+              onClick={() => navigate(`/noticias/${cover.id}`)}
             >
               <div className="news-cover__media">
                 {cover.cover ? (
@@ -111,7 +108,7 @@ export default function NewsPage() {
                 key={n.id}
                 className="news-card"
                 data-cursor="Ler matéria"
-                onClick={() => setActive(n)}
+                onClick={() => navigate(`/noticias/${n.id}`)}
               >
                 <div className="news-card__media">
                   {n.cover ? (
@@ -138,8 +135,6 @@ export default function NewsPage() {
           </div>
         </div>
       )}
-
-      <GlassPanel item={active} onClose={() => setActive(null)} />
     </div>
   )
 }

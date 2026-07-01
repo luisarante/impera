@@ -52,7 +52,7 @@ export default function Hero() {
   }, [])
 
   return (
-    <section ref={sectionRef} className="relative h-screen w-full overflow-hidden">
+    <section id="inicio" ref={sectionRef} className="relative h-screen w-full overflow-hidden">
       {/* Vídeo cinematográfico (trocar /assets/hero.mp4). Fallback: pitch animado. */}
       {/* <div className="hero-pitch absolute inset-0" aria-hidden />
       <video

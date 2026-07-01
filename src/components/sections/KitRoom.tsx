@@ -34,7 +34,7 @@ export default function KitRoom() {
   const hasBackPhoto = Boolean(kit.imageBack) && !imgFailed[`${kit.id}-back`]
 
   return (
-    <section className="relative min-h-screen bg-[var(--color-ink)] px-[8vw] py-32">
+    <section id="manto" className="relative min-h-screen bg-[var(--color-ink)] px-[8vw] py-32">
       <header className="mx-auto mb-12 max-w-6xl text-center">
         <span className="eyebrow">The Kit Room</span>
         <h2 className="mt-4 text-4xl uppercase">Vista o manto</h2>

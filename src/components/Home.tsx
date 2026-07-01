@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { useLenis } from '../lib/useLenis'
+import HomeNav from './HomeNav'
 import Hero from './sections/Hero'
 import BigNumbers from './sections/BigNumbers'
 import SilviaNews from './sections/SilviaNews'
@@ -19,6 +20,7 @@ export default function Home() {
 
   return (
     <main>
+      <HomeNav />
       <Hero />
       <BigNumbers />
       <SilviaNews />

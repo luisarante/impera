@@ -14,6 +14,7 @@
 -- ---------------------------------------------------------------------------
 -- 0. Limpeza (permite reexecucao)
 -- ---------------------------------------------------------------------------
+drop table if exists public.comment_likes cascade;
 drop table if exists public.player_comments cascade;
 drop table if exists public.players      cascade;
 drop table if exists public.news         cascade;
@@ -119,15 +120,29 @@ create table public.big_numbers (
 );
 
 -- Comentarios da torcida sobre os jogadores (pagina do elenco)
+-- parent_id != null => resposta a outro comentario (thread de 1 nivel)
 create table public.player_comments (
   id         uuid primary key default gen_random_uuid(),
   player_id  text not null references public.players(id) on delete cascade,
+  parent_id  uuid references public.player_comments(id) on delete cascade,
   author     text not null check (char_length(author) between 1 and 40),
   body       text not null check (char_length(body) between 1 and 500),
   created_at timestamptz not null default now()
 );
 create index player_comments_player_idx
   on public.player_comments (player_id, created_at desc);
+create index player_comments_parent_idx
+  on public.player_comments (parent_id, created_at);
+
+-- Curtidas dos comentarios: uma linha por visitante/comentario
+create table public.comment_likes (
+  id         uuid primary key default gen_random_uuid(),
+  comment_id uuid not null references public.player_comments(id) on delete cascade,
+  visitor_id text not null check (char_length(visitor_id) between 8 and 64),
+  created_at timestamptz not null default now(),
+  unique (comment_id, visitor_id)
+);
+create index comment_likes_comment_idx on public.comment_likes (comment_id);
 
 -- ---------------------------------------------------------------------------
 -- 2. Row Level Security: leitura publica, escrita so autenticada
@@ -163,6 +178,21 @@ create policy "comments_insert_anyone" on public.player_comments
 drop policy if exists "comments_delete_auth" on public.player_comments;
 create policy "comments_delete_auth" on public.player_comments
   for delete to authenticated using (true);
+
+-- Curtidas: leitura publica; visitante pode curtir e descurtir.
+alter table public.comment_likes enable row level security;
+
+drop policy if exists "likes_read_all" on public.comment_likes;
+create policy "likes_read_all" on public.comment_likes
+  for select using (true);
+
+drop policy if exists "likes_insert_anyone" on public.comment_likes;
+create policy "likes_insert_anyone" on public.comment_likes
+  for insert to anon, authenticated with check (true);
+
+drop policy if exists "likes_delete_anyone" on public.comment_likes;
+create policy "likes_delete_anyone" on public.comment_likes
+  for delete to anon, authenticated using (true);
 
 -- ---------------------------------------------------------------------------
 -- 2.5 Capa unica das noticias: ao marcar uma como capa, desmarca as demais

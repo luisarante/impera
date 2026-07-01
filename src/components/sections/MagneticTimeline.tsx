@@ -208,7 +208,7 @@ export default function MagneticTimeline() {
   }, [n, d])
 
   return (
-    <section ref={rootRef} className="relative bg-[var(--color-ink)]">
+    <section id="jornada" ref={rootRef} className="relative bg-[var(--color-ink)]">
       <header className="absolute left-[8vw] top-16 z-20">
         <span className="eyebrow">A Jornada</span>
       </header>

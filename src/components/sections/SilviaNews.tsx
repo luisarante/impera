@@ -1,9 +1,6 @@
-import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import type { NewsItem } from '../../data/club'
 import { useClubData } from '../../lib/data/ClubDataContext'
 import VerifiedBadge from '../ui/VerifiedBadge'
-import GlassPanel from '../ui/GlassPanel'
 import GhostButton from '../ui/GhostButton'
 
 function formatDate(iso: string): string {
@@ -20,12 +17,11 @@ function formatDate(iso: string): string {
 export default function SilviaNews() {
   const navigate = useNavigate()
   const { news } = useClubData()
-  const [active, setActive] = useState<NewsItem | null>(null)
   const featured = news.find((n) => n.featured) ?? news[0]
   const side = news.filter((n) => n.id !== featured.id).slice(0, 2)
 
   return (
-    <section className="relative bg-[var(--color-ink)] px-[8vw] py-32">
+    <section id="noticias" className="relative bg-[var(--color-ink)] px-[8vw] py-32">
       <header className="mx-auto mb-16 flex max-w-6xl items-center justify-between">
         <h2 className="text-4xl uppercase tracking-[-0.02em]">SilviaNews</h2>
         <span className="eyebrow">A maior secadora do Impera</span>
@@ -34,7 +30,7 @@ export default function SilviaNews() {
       <div className="mx-auto grid max-w-6xl grid-cols-[3fr_2fr] gap-12">
         {/* Manchete principal (60%) */}
         <article
-          onClick={() => setActive(featured)}
+          onClick={() => navigate(`/noticias/${featured.id}`)}
           data-cursor="Ler matéria"
           className="group flex flex-col"
         >
@@ -72,7 +68,7 @@ export default function SilviaNews() {
           {side.map((n) => (
             <article
               key={n.id}
-              onClick={() => setActive(n)}
+              onClick={() => navigate(`/noticias/${n.id}`)}
               data-cursor="Ler matéria"
               className="group flex flex-col py-7 first:pt-0"
             >
@@ -99,8 +95,6 @@ export default function SilviaNews() {
           Ver Todas as Notícias →
         </GhostButton>
       </div>
-
-      <GlassPanel item={active} onClose={() => setActive(null)} />
     </section>
   )
 }

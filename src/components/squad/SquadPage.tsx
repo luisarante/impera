@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { gsap, prefersReducedMotion } from '../../lib/gsap'
 import { useLineup } from '../../lib/useLineup'
@@ -6,20 +6,18 @@ import { useClubData } from '../../lib/data/ClubDataContext'
 import type { Player } from '../../data/club'
 import Pitch from './Pitch'
 import Bench from './Bench'
-import PlayerModal from './PlayerModal'
 
 /**
  * PÁGINA DO ELENCO (/elenco) — o board tático do Imperatrice FC.
  * Mostra a escalação titular (4-3-3) e, logo abaixo, o banco de reservas.
- * Arrastar troca a escalação; clicar num jogador abre o modal de detalhes
- * (ficha + comentários). A montagem é persistida no localStorage via `useLineup`.
+ * Arrastar troca a escalação; clicar num jogador abre a página dedicada dele
+ * (/elenco/:id). A montagem é persistida no localStorage via `useLineup`.
  */
 export default function SquadPage() {
   const navigate = useNavigate()
   const { club, squad } = useClubData()
   const { starters, bench, assign, reset } = useLineup(squad)
   const [draggingId, setDraggingId] = useState<string | null>(null)
-  const [activeId, setActiveId] = useState<string | null>(null)
   const rootRef = useRef<HTMLDivElement>(null)
 
   const goBack = useCallback(() => navigate('/'), [navigate])
@@ -29,14 +27,14 @@ export default function SquadPage() {
     window.scrollTo(0, 0)
   }, [])
 
-  // Volta para a home no Esc (quando o modal não está aberto).
+  // Volta para a home no Esc.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !activeId) goBack()
+      if (e.key === 'Escape') goBack()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [goBack, activeId])
+  }, [goBack])
 
   // Animação de entrada.
   useLayoutEffect(() => {
@@ -65,36 +63,10 @@ export default function SquadPage() {
     [assign],
   )
 
-  const openPlayer = useCallback((player: Player) => setActiveId(player.id), [])
-
-  // Jogador atualmente no modal e seu estado na escalação (recalculado a cada troca).
-  const active = useMemo(() => {
-    if (!activeId) return null
-    const starterEntry = starters.find((s) => s.player.id === activeId)
-    const player =
-      starterEntry?.player ?? bench.find((p) => p.id === activeId) ?? null
-    if (!player) return null
-    return { player, slot: starterEntry?.slot ?? null }
-  }, [activeId, starters, bench])
-
-  // Coloca um reserva no XI: slot do mesmo role, senão o primeiro disponível.
-  const escalar = useCallback(
-    (player: Player) => {
-      const target = starters.find((s) => s.slot.label === player.role) ?? starters[0]
-      if (target) assign(target.slot.id, player.id)
-    },
-    [starters, assign],
-  )
-
-  // Manda um titular pro banco trazendo um reserva (mesmo role, senão qualquer).
-  const reservar = useCallback(
-    (player: Player) => {
-      const entry = starters.find((s) => s.player.id === player.id)
-      if (!entry) return
-      const replacement = bench.find((p) => p.role === player.role) ?? bench[0]
-      if (replacement) assign(entry.slot.id, replacement.id)
-    },
-    [starters, bench, assign],
+  // Clicar num jogador leva à página dedicada dele.
+  const openPlayer = useCallback(
+    (player: Player) => navigate(`/elenco/${player.id}`),
+    [navigate],
   )
 
   return (
@@ -113,7 +85,7 @@ export default function SquadPage() {
       </header>
 
       <p className="squad-hint">
-        Clique num jogador para ver a ficha e os comentários. Arraste um reserva para uma posição
+        Clique num jogador para abrir a ficha e os comentários. Arraste um reserva para uma posição
         do campo para escalá-lo.
       </p>
 
@@ -134,18 +106,6 @@ export default function SquadPage() {
           onDragEnd={() => setDraggingId(null)}
         />
       </div>
-
-      {active && (
-        <PlayerModal
-          player={active.player}
-          isStarter={active.slot !== null}
-          fieldPosition={active.slot?.label}
-          canReserve={bench.length > 0}
-          onEscalar={() => escalar(active.player)}
-          onReservar={() => reservar(active.player)}
-          onClose={() => setActiveId(null)}
-        />
-      )}
     </div>
   )
 }

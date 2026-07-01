@@ -74,7 +74,7 @@ export default function PillarsHall({ onOpenSquad }: PillarsHallProps) {
   }, [])
 
   return (
-    <section ref={rootRef} className="relative h-screen w-full overflow-hidden bg-[var(--color-ink)]">
+    <section id="pilares" ref={rootRef} className="relative h-screen w-full overflow-hidden bg-[var(--color-ink)]">
       <span className="eyebrow absolute left-[8vw] top-12 z-20">O Hall dos Pilares</span>
 
       {pillars.map((p, i) => {
