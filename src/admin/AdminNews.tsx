@@ -95,7 +95,9 @@ export default function AdminNews() {
           <div className="grid grid-cols-1 items-start gap-4 sm:grid-cols-[1fr_auto]">
             <ImageUpload
               bucket="news"
-              label="Capa"
+              label="Capa (16:9)"
+              cropAspect={16 / 9}
+              cropAspectLabel="16:9"
               value={draft.cover_path ?? null}
               onChange={(p) => set('cover_path', p)}
             />

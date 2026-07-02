@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { useLenis } from '../lib/useLenis'
+import { useHomeScroll } from '../lib/useHomeScroll'
 import HomeNav from './HomeNav'
 import Hero from './sections/Hero'
 import BigNumbers from './sections/BigNumbers'
@@ -16,6 +17,7 @@ import FinalWhistle from './sections/FinalWhistle'
  */
 export default function Home() {
   useLenis()
+  useHomeScroll()
   const navigate = useNavigate()
 
   return (

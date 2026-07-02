@@ -58,6 +58,16 @@ export function lenisScrollToEl(target: string | HTMLElement, opts: ScrollToOpts
 }
 
 /**
+ * Posiciona o scroll instantaneamente (sem animação). Usa o Lenis quando ativo
+ * (para não brigar com o loop dele); senão cai no scroll nativo. Útil para
+ * restaurar a posição de scroll ao remontar uma página.
+ */
+export function scrollToInstant(y: number) {
+  if (lenisInstance) lenisInstance.scrollTo(y, { immediate: true, force: true })
+  else window.scrollTo(0, y)
+}
+
+/**
  * Inicializa o motor de scroll suave (Lenis) e faz a ponte com o
  * GSAP/ScrollTrigger. Esta integração é o que evita o conflito clássico
  * entre `position: sticky`/pin e o smooth scroll.

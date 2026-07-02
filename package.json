@@ -22,6 +22,7 @@
     "lenis": "^1.1.18",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
+    "react-easy-crop": "^6.0.2",
     "react-router-dom": "^7.18.1"
   },
   "devDependencies": {

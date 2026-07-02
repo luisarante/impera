@@ -1,5 +1,9 @@
-import { useRef, useState, type ReactNode } from 'react'
+import { lazy, Suspense, useRef, useState, type ReactNode } from 'react'
 import { publicImageUrl, removeImage, uploadImage } from '../lib/supabase'
+
+// Editor de recorte carregado sob demanda: a lib (react-easy-crop) só entra no
+// bundle quando o usuário realmente vai enquadrar uma imagem.
+const ImageCropModal = lazy(() => import('./ImageCropModal'))
 
 const inputCls =
   'w-full rounded-md border border-[var(--hairline)] bg-black/30 px-4 py-2.5 text-sm text-white outline-none transition-colors focus:border-[var(--color-accent)]'
@@ -73,15 +77,22 @@ export function ImageUpload({
   value,
   onChange,
   label = 'Imagem',
+  cropAspect,
+  cropAspectLabel,
 }: {
   bucket: string
   value: string | null
   onChange: (path: string | null) => void
   label?: string
+  /** Se definido, ao escolher um arquivo abre o editor de recorte nesta proporção (ex.: 16/9). */
+  cropAspect?: number
+  /** Rótulo da proporção mostrado no editor e na dica (ex.: "16:9"). */
+  cropAspectLabel?: string
 }) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [cropSrc, setCropSrc] = useState<string | null>(null)
   const url = publicImageUrl(bucket, value)
 
   async function handleFile(file: File) {
@@ -100,49 +111,96 @@ export function ImageUpload({
     }
   }
 
+  // Ao escolher um arquivo: se há proporção de recorte, abre o editor; senão sobe direto.
+  function selectFile(file: File) {
+    if (cropAspect) setCropSrc(URL.createObjectURL(file))
+    else void handleFile(file)
+  }
+
+  function closeCrop() {
+    setCropSrc((prev) => {
+      if (prev) URL.revokeObjectURL(prev)
+      return null
+    })
+  }
+
+  async function confirmCrop(blob: Blob) {
+    const file = new File([blob], `capa-${Date.now()}.jpg`, { type: 'image/jpeg' })
+    closeCrop()
+    await handleFile(file)
+  }
+
   return (
-    <Field label={label}>
-      <div className="flex items-center gap-4">
-        <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-md border border-[var(--hairline)] bg-black/40">
-          {url ? (
-            <img src={url} alt="" className="h-full w-full object-cover" />
-          ) : (
-            <span className="text-[0.6rem] uppercase tracking-[0.16em] text-[var(--text-50)]">
-              sem foto
-            </span>
-          )}
-        </div>
-        <div className="flex flex-col gap-2">
-          <input
-            ref={inputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={(e) => {
-              const f = e.target.files?.[0]
-              if (f) handleFile(f)
-              e.target.value = ''
-            }}
-          />
-          <Button type="button" onClick={() => inputRef.current?.click()} disabled={busy}>
-            {busy ? 'Enviando…' : url ? 'Trocar' : 'Enviar'}
-          </Button>
-          {value && (
-            <Button
-              type="button"
-              variant="danger"
-              onClick={() => {
-                const previous = value
-                onChange(null)
-                if (previous) void removeImage(bucket, previous)
+    <>
+      <Field label={label}>
+        <div className="flex items-center gap-4">
+          <div
+            className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-md border border-[var(--hairline)] bg-black/40"
+            style={cropAspect ? { aspectRatio: String(cropAspect), width: 'auto', height: '6rem' } : undefined}
+          >
+            {url ? (
+              <img src={url} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <span className="px-2 text-center text-[0.6rem] uppercase tracking-[0.16em] text-[var(--text-50)]">
+                sem foto
+              </span>
+            )}
+          </div>
+          <div className="flex flex-col gap-2">
+            <input
+              ref={inputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0]
+                if (f) selectFile(f)
+                e.target.value = ''
               }}
-            >
-              Remover
+            />
+            <Button type="button" onClick={() => inputRef.current?.click()} disabled={busy}>
+              {busy ? 'Enviando…' : url ? 'Trocar' : 'Enviar'}
             </Button>
-          )}
-          {error && <span className="text-xs text-[var(--color-alert)]">{error}</span>}
+            {value && (
+              <Button
+                type="button"
+                variant="danger"
+                onClick={() => {
+                  const previous = value
+                  onChange(null)
+                  if (previous) void removeImage(bucket, previous)
+                }}
+              >
+                Remover
+              </Button>
+            )}
+            {cropAspect && !error && (
+              <span className="text-[0.65rem] leading-snug text-[var(--text-50)]">
+                Ao enviar, você poderá enquadrar a imagem.
+              </span>
+            )}
+            {error && <span className="text-xs text-[var(--color-alert)]">{error}</span>}
+          </div>
         </div>
-      </div>
-    </Field>
+      </Field>
+
+      {cropSrc && cropAspect && (
+        <Suspense
+          fallback={
+            <div className="admin-shell fixed inset-0 z-[2000] flex items-center justify-center bg-black/70 text-sm uppercase tracking-[0.2em] text-[var(--text-50)]">
+              Carregando editor…
+            </div>
+          }
+        >
+          <ImageCropModal
+            src={cropSrc}
+            aspect={cropAspect}
+            aspectLabel={cropAspectLabel}
+            onCancel={closeCrop}
+            onConfirm={confirmCrop}
+          />
+        </Suspense>
+      )}
+    </>
   )
 }
