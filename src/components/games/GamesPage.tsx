@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useClubData } from '../../lib/data/ClubDataContext'
+import type { Player } from '../../data/club'
 import { shareMessage } from '../../lib/share'
 import Badge from '../ui/Badge'
 import {
@@ -11,6 +12,68 @@ import {
   type Match,
   type NightData,
 } from '../../lib/games'
+
+interface NightSummary {
+  matchesPlayed: number // partidas com placar definido
+  goalsFor: number
+  goalsAgainst: number
+  wins: number
+  draws: number
+  losses: number
+  topScorers: { player: Player; goals: number }[] // top 5 goleadores da noite
+  biggestRout: { match: Match; margin: number } | null // maior goleada (por saldo)
+}
+
+/**
+ * Consolida as estatísticas da noite a partir das partidas (só as com placar
+ * definido contam para vitórias/gols). Os goleadores vêm dos gols atribuídos.
+ */
+function buildNightSummary(matches: Match[], squad: Player[]): NightSummary {
+  let goalsFor = 0
+  let goalsAgainst = 0
+  let wins = 0
+  let draws = 0
+  let losses = 0
+  let matchesPlayed = 0
+  let biggestRout: { match: Match; margin: number } | null = null
+  const scorerCount = new Map<string, number>()
+
+  for (const m of matches) {
+    for (const g of m.goals) scorerCount.set(g.playerId, (scorerCount.get(g.playerId) ?? 0) + 1)
+
+    if (m.ourScore == null || m.oppScore == null) continue
+    matchesPlayed += 1
+    goalsFor += m.ourScore
+    goalsAgainst += m.oppScore
+    if (m.ourScore > m.oppScore) wins += 1
+    else if (m.ourScore < m.oppScore) losses += 1
+    else draws += 1
+
+    const margin = Math.abs(m.ourScore - m.oppScore)
+    if (margin > 0 && (!biggestRout || margin > biggestRout.margin)) biggestRout = { match: m, margin }
+  }
+
+  const topScorers = [...scorerCount.entries()]
+    .map(([pid, goals]) => ({ player: squad.find((p) => p.id === pid), goals }))
+    .filter((x): x is { player: Player; goals: number } => Boolean(x.player))
+    .sort((a, b) => b.goals - a.goals)
+    .slice(0, 5)
+
+  return { matchesPlayed, goalsFor, goalsAgainst, wins, draws, losses, topScorers, biggestRout }
+}
+
+function StatTile({ label, value, gold }: { label: string; value: string | number; gold?: boolean }) {
+  return (
+    <div className="rounded-xl border border-[var(--hairline)] bg-white/[0.02] px-3 py-3 text-center">
+      <div className={`text-2xl font-bold tabular-nums ${gold ? 'text-[var(--color-gold)]' : ''}`}>
+        {value}
+      </div>
+      <div className="mt-1 text-[0.62rem] uppercase tracking-[0.14em] text-[var(--text-50)]">
+        {label}
+      </div>
+    </div>
+  )
+}
 
 const WhatsAppIcon = () => (
   <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden>
@@ -68,6 +131,8 @@ export default function GamesPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [voting, setVoting] = useState(false)
+  // Numa noite encerrada, as partidas ficam recolhidas atrás de um botão.
+  const [showResults, setShowResults] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -85,11 +150,12 @@ export default function GamesPage() {
 
   useEffect(() => {
     window.scrollTo(0, 0)
+    setShowResults(false)
     load()
   }, [load])
 
   async function vote(playerId: string) {
-    if (!data || !data.night.mvpOpen || voting) return
+    if (!data || data.night.mvpStatus !== 'aberta' || voting) return
     setVoting(true)
     try {
       await castMvpVote(data.night.id, playerId)
@@ -108,6 +174,21 @@ export default function GamesPage() {
         .map((p) => ({ player: p, votes: data.tally[p.id] ?? 0 }))
         .sort((a, b) => b.votes - a.votes)
     : []
+
+  // Estado da votação de craque: só aparece na página depois de aberta.
+  const votingOpen = data?.night.mvpStatus === 'aberta'
+  const showMvp = data ? data.night.mvpStatus !== 'nao_iniciada' : false
+  const winnerPlayer =
+    data && data.night.mvpStatus === 'encerrada'
+      ? candidates.find((c) => c.player.id === data.night.mvpWinnerId)?.player ?? null
+      : null
+
+  // Resumo estatístico da noite: revelado só depois que a noite é encerrada.
+  const nightClosed = data?.night.status === 'encerrada'
+  const summary = data ? buildNightSummary(data.matches, squad) : null
+  const showSummary = nightClosed && !!summary && summary.matchesPlayed > 0
+  // Encerrada: partidas só quando o torcedor pede. Em andamento: sempre à vista.
+  const matchesVisible = !nightClosed || showResults
 
   return (
     <div className="news-page">
@@ -167,7 +248,231 @@ export default function GamesPage() {
               </p>
             </div>
 
-            {/* Partidas */}
+            {/* Craque da Noite — aparece ACIMA dos jogos assim que a votação abre */}
+            {showMvp && (
+              <section className="mb-14 rounded-2xl border border-[color-mix(in_srgb,var(--color-gold)_40%,transparent)] bg-[color-mix(in_srgb,var(--color-gold)_4%,transparent)] p-5 sm:p-6">
+                <div className="flex items-baseline justify-between">
+                  <span className="eyebrow" style={{ color: 'var(--color-gold)' }}>
+                    {votingOpen ? 'Vote no Craque da Noite' : 'Craque da Noite'}
+                  </span>
+                  <span className="text-xs text-[var(--text-50)]">
+                    {data.totalVotes} {data.totalVotes === 1 ? 'voto' : 'votos'}
+                    {!votingOpen ? ' · encerrada' : ''}
+                  </span>
+                </div>
+
+                {winnerPlayer && (
+                  <div className="mt-4 flex items-center gap-3 rounded-xl border border-[var(--color-gold)] bg-[color-mix(in_srgb,var(--color-gold)_8%,transparent)] px-4 py-3">
+                    <span className="text-2xl" aria-hidden>
+                      👑
+                    </span>
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[var(--color-gold)] bg-black/40 text-sm">
+                      {winnerPlayer.photo ? (
+                        <img src={winnerPlayer.photo} alt="" className="h-full w-full object-cover" />
+                      ) : (
+                        winnerPlayer.number.replace('#', '')
+                      )}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block truncate font-semibold text-[var(--color-gold)]">
+                        {winnerPlayer.name}
+                      </span>
+                      <span className="block text-xs text-[var(--text-50)]">
+                        Eleito o craque da noite
+                      </span>
+                    </span>
+                  </div>
+                )}
+
+                {candidates.length === 0 ? (
+                  <p className="mt-4 text-sm text-[var(--text-50)]">
+                    A votação será liberada quando os jogadores da noite forem definidos.
+                  </p>
+                ) : (
+                  <div className="mt-4 space-y-2">
+                    {candidates.map(({ player, votes }) => {
+                      const pct = data.totalVotes ? Math.round((votes / data.totalVotes) * 100) : 0
+                      const mine = data.myVote === player.id
+                      const isWinner = !votingOpen && player.id === data.night.mvpWinnerId
+                      return (
+                        <button
+                          key={player.id}
+                          type="button"
+                          onClick={() => vote(player.id)}
+                          disabled={!votingOpen || voting}
+                          className={`relative w-full overflow-hidden rounded-lg border text-left transition-colors ${
+                            isWinner || mine ? 'border-[var(--color-gold)]' : 'border-[var(--hairline)]'
+                          } ${votingOpen ? 'hover:border-[var(--color-accent)]' : 'cursor-default'}`}
+                        >
+                          <span
+                            className="absolute inset-y-0 left-0"
+                            style={{
+                              width: `${pct}%`,
+                              background:
+                                isWinner || mine ? 'rgba(255,208,0,0.16)' : 'rgba(0,150,64,0.16)',
+                            }}
+                            aria-hidden
+                          />
+                          <span className="relative flex items-center gap-3 px-4 py-3">
+                            <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[var(--hairline)] bg-black/40 text-sm">
+                              {player.photo ? (
+                                <img src={player.photo} alt="" className="h-full w-full object-cover" />
+                              ) : (
+                                player.number.replace('#', '')
+                              )}
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate font-medium">
+                                {isWinner && (
+                                  <span className="mr-1" aria-hidden>
+                                    👑
+                                  </span>
+                                )}
+                                {player.name}
+                                {mine && (
+                                  <span className="ml-2 text-xs text-[var(--color-gold)]">seu voto</span>
+                                )}
+                              </span>
+                              <span className="block text-xs text-[var(--text-50)]">{player.position}</span>
+                            </span>
+                            <span className="shrink-0 text-right">
+                              <span className="block font-semibold tabular-nums">{pct}%</span>
+                              <span className="block text-xs text-[var(--text-50)]">
+                                {votes} {votes === 1 ? 'voto' : 'votos'}
+                              </span>
+                            </span>
+                          </span>
+                        </button>
+                      )
+                    })}
+                    {votingOpen && (
+                      <p className="pt-1 text-xs text-[var(--text-50)]">
+                        Toque num jogador para votar. Você pode trocar seu voto a qualquer momento.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </section>
+            )}
+
+            {/* Resumo da noite — revelado depois que a noite é encerrada */}
+            {showSummary && summary && (
+              <section className="mb-14">
+                <span className="eyebrow" style={{ color: 'var(--color-accent)' }}>
+                  Resumo da Noite
+                </span>
+
+                <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-5">
+                  <StatTile label="Jogos" value={summary.matchesPlayed} />
+                  <StatTile label="V · E · D" value={`${summary.wins}·${summary.draws}·${summary.losses}`} />
+                  <StatTile label="Gols pró" value={summary.goalsFor} gold />
+                  <StatTile label="Gols contra" value={summary.goalsAgainst} />
+                  <StatTile
+                    label="Saldo"
+                    value={`${summary.goalsFor - summary.goalsAgainst >= 0 ? '+' : ''}${
+                      summary.goalsFor - summary.goalsAgainst
+                    }`}
+                  />
+                </div>
+
+                <div className="mt-6 grid gap-6 md:grid-cols-2">
+                  {/* Top 5 goleadores da noite */}
+                  <div>
+                    <h4 className="text-sm uppercase tracking-[0.14em] text-[var(--color-gold)]">
+                      Goleadores da noite
+                    </h4>
+                    {summary.topScorers.length === 0 ? (
+                      <p className="mt-3 text-sm text-[var(--text-50)]">
+                        Nenhum gol atribuído a jogadores do elenco.
+                      </p>
+                    ) : (
+                      <ol className="mt-3 space-y-2">
+                        {summary.topScorers.map(({ player, goals }, i) => (
+                          <li
+                            key={player.id}
+                            className="flex items-center gap-3 rounded-lg border border-[var(--hairline)] bg-white/[0.02] px-3 py-2"
+                          >
+                            <span className="w-5 shrink-0 text-center text-sm font-bold text-[var(--text-50)]">
+                              {i + 1}
+                            </span>
+                            <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[var(--hairline)] bg-black/40 text-xs">
+                              {player.photo ? (
+                                <img src={player.photo} alt="" className="h-full w-full object-cover" />
+                              ) : (
+                                player.number.replace('#', '')
+                              )}
+                            </span>
+                            <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                              {player.name}
+                            </span>
+                            <span className="shrink-0 text-sm font-semibold tabular-nums">
+                              {goals} {goals === 1 ? 'gol' : 'gols'}
+                            </span>
+                          </li>
+                        ))}
+                      </ol>
+                    )}
+                  </div>
+
+                  {/* Maior goleada da noite */}
+                  <div>
+                    <h4 className="text-sm uppercase tracking-[0.14em] text-[var(--color-gold)]">
+                      Maior goleada
+                    </h4>
+                    {summary.biggestRout ? (
+                      (() => {
+                        const m = summary.biggestRout.match
+                        const win = (m.ourScore as number) > (m.oppScore as number)
+                        return (
+                          <div className="mt-3 rounded-xl border border-[var(--hairline)] bg-white/[0.02] p-4">
+                            <span
+                              className={`inline-block rounded-full px-2 py-0.5 text-[0.62rem] font-semibold uppercase tracking-[0.12em] ${
+                                win
+                                  ? 'bg-[color-mix(in_srgb,var(--color-gold)_18%,transparent)] text-[var(--color-gold)]'
+                                  : 'bg-[color-mix(in_srgb,var(--color-alert)_18%,transparent)] text-[var(--color-alert)]'
+                              }`}
+                            >
+                              {win ? 'Vitória' : 'Derrota'} · saldo {summary.biggestRout.margin}
+                            </span>
+                            <p className="mt-3 text-center text-lg font-bold tabular-nums">
+                              {club.name} <span className={win ? 'text-[var(--color-gold)]' : ''}>{m.ourScore}</span>
+                              <span className="mx-2 text-[var(--text-30)]">×</span>
+                              <span className={!win ? 'text-[var(--color-gold)]' : ''}>{m.oppScore}</span>{' '}
+                              {m.opponent}
+                            </p>
+                            {m.competition && (
+                              <p className="mt-1 text-center text-xs text-[var(--text-50)]">
+                                {m.competition}
+                              </p>
+                            )}
+                          </div>
+                        )
+                      })()
+                    ) : (
+                      <p className="mt-3 text-sm text-[var(--text-50)]">
+                        Sem goleadas nesta noite.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </section>
+            )}
+
+            {/* Botão: revela todas as partidas (placar + quem marcou) da noite */}
+            {nightClosed && data.matches.length > 0 && (
+              <div className="mb-14 flex justify-center">
+                <button
+                  type="button"
+                  onClick={() => setShowResults((v) => !v)}
+                  className="rounded-full border border-[var(--hairline)] px-6 py-3 text-sm font-semibold uppercase tracking-[0.1em] text-[var(--text-70)] transition-colors hover:border-[var(--color-accent)] hover:text-white"
+                >
+                  {showResults ? 'Ocultar resultados' : 'Ver todos os resultados da noite'}
+                </button>
+              </div>
+            )}
+
+            {/* Partidas / resultados completos — recolhidos numa noite encerrada */}
+            {matchesVisible && (
             <section className="mb-14">
               <span className="eyebrow" style={{ color: 'var(--color-accent)' }}>
                 Partidas
@@ -269,86 +574,10 @@ export default function GamesPage() {
                 </div>
               )}
             </section>
-
-            {/* Craque da noite (votação) */}
-            <section className="mb-14">
-              <div className="flex items-baseline justify-between">
-                <span className="eyebrow" style={{ color: 'var(--color-gold)' }}>
-                  Craque da Noite
-                </span>
-                <span className="text-xs text-[var(--text-50)]">
-                  {data.totalVotes} {data.totalVotes === 1 ? 'voto' : 'votos'}
-                  {!data.night.mvpOpen ? ' · encerrada' : ''}
-                </span>
-              </div>
-
-              {candidates.length === 0 ? (
-                <p className="mt-4 text-sm text-[var(--text-50)]">
-                  A votação será liberada quando os jogadores da noite forem definidos.
-                </p>
-              ) : (
-                <div className="mt-4 space-y-2">
-                  {candidates.map(({ player, votes }) => {
-                    const pct = data.totalVotes ? Math.round((votes / data.totalVotes) * 100) : 0
-                    const mine = data.myVote === player.id
-                    return (
-                      <button
-                        key={player.id}
-                        type="button"
-                        onClick={() => vote(player.id)}
-                        disabled={!data.night.mvpOpen || voting}
-                        className={`relative w-full overflow-hidden rounded-lg border text-left transition-colors ${
-                          mine ? 'border-[var(--color-gold)]' : 'border-[var(--hairline)]'
-                        } ${data.night.mvpOpen ? 'hover:border-[var(--color-accent)]' : 'cursor-default'}`}
-                      >
-                        <span
-                          className="absolute inset-y-0 left-0"
-                          style={{
-                            width: `${pct}%`,
-                            background: mine ? 'rgba(255,208,0,0.16)' : 'rgba(0,150,64,0.16)',
-                          }}
-                          aria-hidden
-                        />
-                        <span className="relative flex items-center gap-3 px-4 py-3">
-                          <span
-                            className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[var(--hairline)] bg-black/40 text-sm"
-                          >
-                            {player.photo ? (
-                              <img src={player.photo} alt="" className="h-full w-full object-cover" />
-                            ) : (
-                              player.number.replace('#', '')
-                            )}
-                          </span>
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate font-medium">
-                              {player.name}
-                              {mine && (
-                                <span className="ml-2 text-xs text-[var(--color-gold)]">seu voto</span>
-                              )}
-                            </span>
-                            <span className="block text-xs text-[var(--text-50)]">{player.position}</span>
-                          </span>
-                          <span className="shrink-0 text-right">
-                            <span className="block font-semibold tabular-nums">{pct}%</span>
-                            <span className="block text-xs text-[var(--text-50)]">
-                              {votes} {votes === 1 ? 'voto' : 'votos'}
-                            </span>
-                          </span>
-                        </span>
-                      </button>
-                    )
-                  })}
-                  {data.night.mvpOpen && (
-                    <p className="pt-1 text-xs text-[var(--text-50)]">
-                      Toque num jogador para votar. Você pode trocar seu voto a qualquer momento.
-                    </p>
-                  )}
-                </div>
-              )}
-            </section>
+            )}
 
             {/* Eventos */}
-            {data.events.length > 0 && (
+            {matchesVisible && data.events.length > 0 && (
               <section>
                 <span className="eyebrow" style={{ color: 'var(--color-accent)' }}>
                   Eventos da Noite

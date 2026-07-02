@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import {
+  closeMvpVoting,
+  closeNight,
+  openMvpVoting,
+  reopenNight,
+  type MvpStatus,
+  type NightStatus,
+} from '../lib/games'
 import { Button, Card, Field, PageHeader, Select, TextArea, TextInput } from './ui'
 import { useConfirm, useToast } from './feedback'
 
@@ -8,7 +16,9 @@ interface NightRow {
   title: string
   date: string
   subtitle: string | null
-  mvp_open: boolean
+  status: NightStatus
+  mvp_status: MvpStatus
+  mvp_winner_id: string | null
 }
 interface MatchRow {
   id: string
@@ -36,6 +46,14 @@ interface PlayerRow {
 }
 
 const todayIso = () => new Date().toISOString().slice(0, 10)
+
+/** Frase curta descrevendo o estágio da noite (para a lista do admin). */
+function nightStageLabel(n: Pick<NightRow, 'status' | 'mvp_status'>): string {
+  if (n.status === 'em_andamento') return 'Em andamento'
+  if (n.mvp_status === 'aberta') return 'Encerrada · votação aberta'
+  if (n.mvp_status === 'encerrada') return 'Encerrada · craque apurado'
+  return 'Encerrada · votação não iniciada'
+}
 
 export default function AdminGames() {
   const confirm = useConfirm()
@@ -66,7 +84,6 @@ export default function AdminGames() {
       title: draft.title,
       date: draft.date || todayIso(),
       subtitle: draft.subtitle || null,
-      mvp_open: draft.mvp_open ?? true,
     }
     const { error } = draft.id
       ? await supabase.from('game_nights').update(payload).eq('id', draft.id)
@@ -124,14 +141,10 @@ export default function AdminGames() {
               />
             </Field>
           </div>
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={draft.mvp_open ?? true}
-              onChange={(e) => setDraft({ ...draft, mvp_open: e.target.checked })}
-            />
-            Votação de craque aberta
-          </label>
+          <p className="text-xs text-[var(--text-50)]">
+            A votação de craque é aberta e encerrada em <strong>Gerenciar</strong>, depois que a
+            noite for encerrada.
+          </p>
           <div className="flex gap-3 pt-2">
             <Button variant="primary" onClick={saveNight} disabled={!draft.title}>
               Salvar
@@ -148,7 +161,7 @@ export default function AdminGames() {
       <PageHeader
         title="Noites de jogo"
         action={
-          <Button variant="primary" onClick={() => setDraft({ title: '', date: todayIso(), mvp_open: true })}>
+          <Button variant="primary" onClick={() => setDraft({ title: '', date: todayIso() })}>
             + Nova noite
           </Button>
         }
@@ -164,7 +177,8 @@ export default function AdminGames() {
               <p className="truncate font-medium">{n.title}</p>
               <p className="truncate text-xs text-[var(--text-50)]">
                 {new Date(`${n.date}T00:00:00`).toLocaleDateString('pt-BR')}
-                {n.mvp_open ? ' · votação aberta' : ' · votação encerrada'}
+                {' · '}
+                {nightStageLabel(n)}
               </p>
             </div>
             <div className="flex gap-2">
@@ -209,6 +223,12 @@ function NightEditor({ night, onBack }: { night: NightRow; onBack: () => void })
   const [matchDraft, setMatchDraft] = useState<Partial<MatchRow> | null>(null)
   const [eventDraft, setEventDraft] = useState<Partial<EventRow> | null>(null)
 
+  // Ciclo de vida da noite (espelho local, atualizado a cada ação).
+  const [status, setStatus] = useState<NightStatus>(night.status)
+  const [mvpStatus, setMvpStatus] = useState<MvpStatus>(night.mvp_status)
+  const [winnerId, setWinnerId] = useState<string | null>(night.mvp_winner_id)
+  const [busy, setBusy] = useState(false)
+
   const load = useCallback(async () => {
     const [m, e, p, c] = await Promise.all([
       supabase.from('matches').select('*').eq('night_id', night.id).order('sort_order'),
@@ -247,6 +267,69 @@ function NightEditor({ night, onBack }: { night: NightRow; onBack: () => void })
   useEffect(() => {
     load()
   }, [load])
+
+  // Executa uma ação de ciclo de vida com trava anti-duplo-clique e toast.
+  async function runLifecycle(fn: () => Promise<void>, ok: string) {
+    if (busy) return
+    setBusy(true)
+    try {
+      await fn()
+      toast(ok, 'success')
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Falha na operação.', 'error')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const doCloseNight = () =>
+    runLifecycle(async () => {
+      await closeNight(night.id)
+      setStatus('encerrada')
+    }, 'Noite encerrada. Você já pode abrir a votação do craque.')
+
+  const doReopenNight = () =>
+    runLifecycle(async () => {
+      await reopenNight(night.id)
+      setStatus('em_andamento')
+    }, 'Noite reaberta.')
+
+  const doOpenVoting = () =>
+    runLifecycle(async () => {
+      if (candidates.size === 0) throw new Error('Marque quem jogou (candidatos) antes de abrir a votação.')
+      await openMvpVoting(night.id)
+      setMvpStatus('aberta')
+      setWinnerId(null)
+    }, 'Votação do craque aberta — já aparece na página /jogos.')
+
+  async function doCloseVoting() {
+    if (busy) return
+    const ok = await confirm({
+      title: 'Encerrar votação do craque',
+      message: 'O jogador mais votado será salvo como craque da noite e a votação será fechada.',
+      confirmLabel: 'Encerrar votação',
+    })
+    if (!ok) return
+    setBusy(true)
+    try {
+      const w = await closeMvpVoting(night.id)
+      setMvpStatus('encerrada')
+      setWinnerId(w)
+      const name = w ? players.find((p) => p.id === w)?.name ?? 'craque' : null
+      toast(name ? `Votação encerrada. Craque da noite: ${name}.` : 'Votação encerrada (sem votos).', 'success')
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Falha ao encerrar a votação.', 'error')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const doReopenVoting = () =>
+    runLifecycle(async () => {
+      await openMvpVoting(night.id)
+      setMvpStatus('aberta')
+      setWinnerId(null)
+    }, 'Votação reaberta.')
 
   async function saveMatch() {
     if (!matchDraft || !matchDraft.opponent) return
@@ -334,6 +417,78 @@ function NightEditor({ night, onBack }: { night: NightRow; onBack: () => void })
         ← Todas as noites
       </button>
       <PageHeader title={night.title} />
+
+      {/* Ciclo de vida: encerrar noite → abrir votação → encerrar votação */}
+      <Card className="mb-8 space-y-4">
+        <div>
+          <h3 className="text-sm uppercase tracking-[0.14em] text-[var(--color-accent)]">
+            Status &amp; votação do craque
+          </h3>
+          <p className="mt-1 text-xs text-[var(--text-50)]">{nightStageLabel({ status, mvp_status: mvpStatus })}</p>
+        </div>
+
+        {status === 'em_andamento' ? (
+          <div className="space-y-2">
+            <Button variant="primary" onClick={doCloseNight} disabled={busy}>
+              Encerrar noite
+            </Button>
+            <p className="text-xs text-[var(--text-50)]">
+              Encerre a noite quando os jogos acabarem. Depois disso você poderá abrir a votação do
+              craque.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {mvpStatus === 'nao_iniciada' && (
+              <div className="space-y-2">
+                <Button variant="primary" onClick={doOpenVoting} disabled={busy}>
+                  Abrir votação do craque
+                </Button>
+                <p className="text-xs text-[var(--text-50)]">
+                  A votação aparecerá em destaque na página /jogos desta noite. Marque antes quem
+                  jogou, na seção “quem jogou” abaixo.
+                </p>
+              </div>
+            )}
+
+            {mvpStatus === 'aberta' && (
+              <div className="space-y-2">
+                <Button variant="primary" onClick={doCloseVoting} disabled={busy}>
+                  Encerrar votação do craque
+                </Button>
+                <p className="text-xs text-[var(--text-50)]">
+                  A votação está aberta na página /jogos. Ao encerrar, o mais votado é salvo como
+                  craque da noite.
+                </p>
+              </div>
+            )}
+
+            {mvpStatus === 'encerrada' && (
+              <div className="space-y-2 rounded-md border border-[var(--color-gold)] px-4 py-3">
+                <p className="text-sm">
+                  <span aria-hidden>👑 </span>
+                  Craque da noite:{' '}
+                  <strong className="text-[var(--color-gold)]">
+                    {winnerId ? players.find((p) => p.id === winnerId)?.name ?? '—' : 'sem votos'}
+                  </strong>
+                </p>
+                <Button onClick={doReopenVoting} disabled={busy}>
+                  Reabrir votação
+                </Button>
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={doReopenNight}
+              disabled={busy}
+              className="text-xs text-[var(--text-50)] underline transition-colors hover:text-white disabled:opacity-50"
+            >
+              Reabrir noite
+            </button>
+          </div>
+        )}
+      </Card>
 
       {/* Partidas */}
       <section className="mb-10">

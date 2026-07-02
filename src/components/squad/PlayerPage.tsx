@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useClubData } from '../../lib/data/ClubDataContext'
+import { fetchMvpTitleCount } from '../../lib/games'
 import PlayerComments from './PlayerComments'
 
 /**
@@ -13,9 +14,27 @@ export default function PlayerPage() {
   const { club, squad } = useClubData()
   const player = squad.find((p) => p.id === id) ?? null
   const [photoOk, setPhotoOk] = useState(Boolean(player?.photo))
+  const [mvpTitles, setMvpTitles] = useState<number | null>(null)
 
   useEffect(() => {
     window.scrollTo(0, 0)
+  }, [id])
+
+  // Nº de vezes que este jogador foi eleito craque da noite.
+  useEffect(() => {
+    if (!id) return
+    let alive = true
+    setMvpTitles(null)
+    fetchMvpTitleCount(id)
+      .then((n) => {
+        if (alive) setMvpTitles(n)
+      })
+      .catch(() => {
+        if (alive) setMvpTitles(0)
+      })
+    return () => {
+      alive = false
+    }
   }, [id])
 
   useEffect(() => {
@@ -103,6 +122,14 @@ export default function PlayerPage() {
                 {player.number} · {player.role}
                 {player.starter ? ' · Titular' : ' · Reserva'}
               </p>
+
+              {mvpTitles != null && mvpTitles > 0 && (
+                <p className="mt-4 inline-flex items-center gap-2 rounded-full border border-[var(--color-gold)] px-3 py-1 text-sm font-semibold text-[var(--color-gold)]">
+                  <span aria-hidden>👑</span>
+                  Craque da noite · {mvpTitles}
+                  {mvpTitles === 1 ? ' vez' : ' vezes'}
+                </p>
+              )}
 
               {player.dilemma && <p className="ficha__dilemma">{player.dilemma}</p>}
               {player.description && <p className="ficha__desc">{player.description}</p>}

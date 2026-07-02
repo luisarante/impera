@@ -371,14 +371,19 @@ insert into public.big_numbers (id, value, numeric_value, prefix, suffix, label,
 -- 5. NOITES DE JOGO — partidas, craque da noite e eventos (ver migração 006)
 -- ===========================================================================
 create table public.game_nights (
-  id         uuid primary key default gen_random_uuid(),
-  title      text not null,
-  date       date not null default current_date,
-  subtitle   text,
-  mvp_open   boolean not null default true,
-  created_at timestamptz not null default now()
+  id            uuid primary key default gen_random_uuid(),
+  title         text not null,
+  date          date not null default current_date,
+  subtitle      text,
+  -- Ciclo de vida (ver migração 009): a noite é encerrada antes de abrir a
+  -- votação; ao encerrar a votação, o craque mais votado vai em mvp_winner_id.
+  status        text not null default 'em_andamento' check (status in ('em_andamento','encerrada')),
+  mvp_status    text not null default 'nao_iniciada' check (mvp_status in ('nao_iniciada','aberta','encerrada')),
+  mvp_winner_id text references public.players(id) on delete set null,
+  created_at    timestamptz not null default now()
 );
 create index game_nights_date_idx on public.game_nights (date desc, created_at desc);
+create index game_nights_mvp_winner_idx on public.game_nights (mvp_winner_id) where mvp_winner_id is not null;
 
 create table public.matches (
   id          uuid primary key default gen_random_uuid(),
