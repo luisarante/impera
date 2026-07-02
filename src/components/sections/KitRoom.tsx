@@ -34,15 +34,15 @@ export default function KitRoom() {
   const hasBackPhoto = Boolean(kit.imageBack) && !imgFailed[`${kit.id}-back`]
 
   return (
-    <section id="manto" className="relative min-h-screen bg-[var(--color-ink)] px-[8vw] py-32">
-      <header className="mx-auto mb-12 max-w-6xl text-center">
+    <section id="manto" className="relative min-h-screen bg-[var(--color-ink)] px-[8vw] py-20 md:py-32">
+      <header className="mx-auto mb-10 max-w-6xl text-center md:mb-12">
         <span className="eyebrow">The Kit Room</span>
-        <h2 className="mt-4 text-4xl uppercase">Vista o manto</h2>
+        <h2 className="mt-4 text-3xl uppercase md:text-4xl">Vista o manto</h2>
       </header>
 
-      <div className="mx-auto grid max-w-6xl grid-cols-[auto_1fr_auto] items-center gap-10">
+      <div className="mx-auto grid max-w-6xl grid-cols-1 items-center gap-10 lg:grid-cols-[auto_1fr_auto]">
         {/* Esquerda — troca de kits */}
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-row flex-wrap justify-center gap-3 lg:flex-col lg:gap-4">
           {kits.map((k, i) => (
             <button
               key={k.id}
@@ -64,11 +64,8 @@ export default function KitRoom() {
 
         {/* Centro — camisa estática + flip */}
         <div className="flex flex-col items-center">
-          <div className="kit-stage flex h-[600px] w-full select-none items-center justify-center">
-            <div
-              className="kit-shirt"
-              style={{ transform: flipped ? 'rotateY(180deg)' : 'none' }}
-            >
+          <div className="kit-stage flex h-[420px] w-full select-none items-center justify-center sm:h-[520px] lg:h-[600px]">
+            <div className={`kit-shirt${flipped ? ' is-flipped' : ''}`}>
               {/* FRENTE — foto real ou placeholder estilizado */}
               {hasPhoto ? (
                 <div className="kit-face">
@@ -113,10 +110,10 @@ export default function KitRoom() {
                     className="absolute inset-0 h-full w-full object-contain"
                   />
                 )}
-                <span className="relative -top-13 text-2xl font-semibold uppercase tracking-[0.05em] text-red-600">
+                <span className="relative -top-10 text-xl font-semibold uppercase tracking-[0.05em] text-red-600 sm:-top-13 sm:text-2xl">
                   {playerName || 'JOGADOR'}
                 </span>
-                <span className="relative -top-7 text-9xl font-bold leading-none text-red-600">
+                <span className="relative -top-5 text-7xl font-bold leading-none text-red-600 sm:-top-7 sm:text-9xl">
                   {playerNumber || '0'}
                 </span>
               </div>
@@ -135,7 +132,7 @@ export default function KitRoom() {
         </div>
 
         {/* Direita — compra */}
-        <div className="w-[300px]">
+        <div className="mx-auto w-full max-w-sm lg:mx-0 lg:w-[300px]">
           <h3 className="text-2xl">{kit.name}</h3>
           <p className="mt-3 text-sm leading-relaxed text-[var(--text-50)]">{kit.description}</p>
 

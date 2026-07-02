@@ -57,8 +57,8 @@ export function Card({ children, className = '' }: { children: ReactNode; classN
 
 export function PageHeader({ title, action }: { title: string; action?: ReactNode }) {
   return (
-    <div className="mb-8 flex items-center justify-between">
-      <h1 className="text-2xl font-semibold uppercase tracking-[0.04em]">{title}</h1>
+    <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
+      <h1 className="text-xl font-semibold uppercase tracking-[0.04em] sm:text-2xl">{title}</h1>
       {action}
     </div>
   )

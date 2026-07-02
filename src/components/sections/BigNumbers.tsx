@@ -9,13 +9,15 @@ import Counter from '../ui/Counter'
 export default function BigNumbers() {
   const { bigNumbers } = useClubData()
   return (
-    <section className="relative flex min-h-screen items-center bg-[var(--color-ink)] px-[8vw] py-40">
-      <div className="mx-auto grid w-full max-w-6xl grid-cols-3 gap-x-[6vw]">
+    <section className="relative flex min-h-screen items-center bg-[var(--color-ink)] px-[8vw] py-24 md:py-40">
+      <div className="mx-auto grid w-full max-w-6xl grid-cols-1 gap-y-12 md:grid-cols-3 md:gap-x-[6vw] md:gap-y-0">
         {bigNumbers.map((n, i) => (
           <div
             key={i}
             className={`flex flex-col items-center text-center ${
-              i === 1 ? 'border-x border-[var(--hairline)] px-6' : ''
+              i === 1
+                ? 'border-y border-[var(--hairline)] py-8 md:border-x md:border-y-0 md:px-6 md:py-0'
+                : ''
             }`}
           >
             <span

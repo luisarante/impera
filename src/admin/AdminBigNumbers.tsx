@@ -68,7 +68,7 @@ export default function AdminBigNumbers() {
       <div className="max-w-2xl">
         <PageHeader title={draft.id ? 'Editar número' : 'Novo número'} />
         <div className="space-y-5">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="Valor exibido (ex.: 500)">
               <TextInput value={draft.value ?? ''} onChange={(e) => set('value', e.target.value)} />
             </Field>
@@ -80,7 +80,7 @@ export default function AdminBigNumbers() {
               />
             </Field>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="Prefixo (ex.: +)">
               <TextInput value={draft.prefix ?? ''} onChange={(e) => set('prefix', e.target.value || null)} />
             </Field>

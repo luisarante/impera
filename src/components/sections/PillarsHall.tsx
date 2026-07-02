@@ -87,13 +87,10 @@ export default function PillarsHall({ onOpenSquad }: PillarsHallProps) {
             }}
             className="absolute inset-0 flex items-center justify-center px-[8vw]"
           >
-            <div
-              className={`grid w-full max-w-6xl 2xl:max-w-7xl 2xl:max-w-7xl grid-cols-2 items-center gap-12 2xl:gap-16 ${photoRight ? '' : ''
-                }`}
-            >
+            <div className="grid w-full max-w-6xl grid-cols-1 items-center gap-8 md:grid-cols-2 md:gap-12 2xl:max-w-7xl 2xl:gap-16">
               {/* Foto (placeholder esmaecido nas bordas) */}
-              <div className={photoRight ? 'order-2' : 'order-1'}>
-                <div className="relative mx-auto block w-full max-w-[clamp(16rem,26vw,36rem)] overflow-hidden">
+              <div className={`order-1 ${photoRight ? 'md:order-2' : 'md:order-1'}`}>
+                <div className="relative mx-auto block w-full max-w-[13rem] overflow-hidden sm:max-w-[15rem] md:max-w-[clamp(16rem,26vw,36rem)]">
                   {/* O Overlay que cria a sombra interna (Fade) em todos os lados */}
                   <div className="absolute inset-0 z-10 pointer-events-none shadow-[inset_0_0_10px_rgba(0,0,0,1)] bg-gradient-to-t from-black via-transparent to-black before:absolute before:inset-0 before:bg-gradient-to-r before:from-black before:via-transparent before:to-black" />
 
@@ -107,19 +104,22 @@ export default function PillarsHall({ onOpenSquad }: PillarsHallProps) {
               </div>
 
               {/* Especificações */}
-              <div className={photoRight ? 'order-1 text-right' : 'order-2 text-left'}>
+              <div
+                className={`order-2 text-center ${photoRight ? 'md:order-1 md:text-right' : 'md:order-2 md:text-left'
+                  }`}
+              >
                 <span
                   className="text-sm font-medium uppercase tracking-[0.24em]"
                   style={{ color: p.accent === 'gold' ? 'var(--color-gold)' : 'var(--color-accent)' }}
                 >
                   {p.position}
                 </span>
-                <h3 className="mt-3 text-[clamp(3rem,6vw,6rem)] font-bold uppercase leading-[0.9]">
+                <h3 className="mt-3 text-[clamp(2.5rem,9vw,6rem)] font-bold uppercase leading-[0.9] md:text-[clamp(3rem,6vw,6rem)]">
                   {p.name}
                 </h3>
-                <p className="mt-6 text-xl italic text-[var(--text-70)]">{p.dilemma}</p>
+                <p className="mt-4 text-lg italic text-[var(--text-70)] md:mt-6 md:text-xl">{p.dilemma}</p>
                 <p
-                  className={`mt-5 max-w-md text-[var(--text-50)] leading-relaxed ${photoRight ? 'ml-auto' : ''
+                  className={`mt-5 max-w-md text-[var(--text-50)] leading-relaxed mx-auto md:mx-0 ${photoRight ? 'md:ml-auto' : ''
                     }`}
                 >
                   {p.description}

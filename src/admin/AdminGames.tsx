@@ -109,7 +109,7 @@ export default function AdminGames() {
           <Field label="Título (ex.: Rodada 12 — Terça)">
             <TextInput value={draft.title ?? ''} onChange={(e) => setDraft({ ...draft, title: e.target.value })} />
           </Field>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="Data">
               <TextInput
                 type="date"
@@ -156,7 +156,10 @@ export default function AdminGames() {
       {loading && <p className="text-[var(--text-50)]">Carregando…</p>}
       <div className="space-y-3">
         {nights.map((n) => (
-          <Card key={n.id} className="flex items-center gap-4">
+          <Card
+            key={n.id}
+            className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:gap-4"
+          >
             <div className="min-w-0 flex-1">
               <p className="truncate font-medium">{n.title}</p>
               <p className="truncate text-xs text-[var(--text-50)]">
@@ -164,13 +167,21 @@ export default function AdminGames() {
                 {n.mvp_open ? ' · votação aberta' : ' · votação encerrada'}
               </p>
             </div>
-            <Button variant="primary" onClick={() => setSelected(n)}>
-              Gerenciar
-            </Button>
-            <Button onClick={() => setDraft(n)}>Editar</Button>
-            <Button variant="danger" onClick={() => delNight(n)}>
-              ✕
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant="primary"
+                className="flex-1 sm:flex-none"
+                onClick={() => setSelected(n)}
+              >
+                Gerenciar
+              </Button>
+              <Button className="flex-1 sm:flex-none" onClick={() => setDraft(n)}>
+                Editar
+              </Button>
+              <Button variant="danger" onClick={() => delNight(n)}>
+                ✕
+              </Button>
+            </div>
           </Card>
         ))}
         {!loading && nights.length === 0 && (
@@ -339,7 +350,7 @@ function NightEditor({ night, onBack }: { night: NightRow; onBack: () => void })
                 onChange={(e) => setMatchDraft({ ...matchDraft, opponent: e.target.value })}
               />
             </Field>
-            <div className="grid grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               <Field label="Nossos gols">
                 <TextInput
                   type="number"
@@ -538,7 +549,7 @@ function NightEditor({ night, onBack }: { night: NightRow; onBack: () => void })
 
         {eventDraft && (
           <Card className="mb-3 space-y-3">
-            <div className="grid grid-cols-[auto_1fr] gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-[auto_1fr]">
               <Field label="Horário">
                 <TextInput
                   className="w-28"

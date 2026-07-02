@@ -88,7 +88,7 @@ export default function AdminPlayers() {
             value={draft.photo_path ?? null}
             onChange={(path) => set('photo_path', path)}
           />
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="Nome">
               <TextInput value={draft.name ?? ''} onChange={(e) => set('name', e.target.value)} />
             </Field>
@@ -99,7 +99,7 @@ export default function AdminPlayers() {
           <Field label="Posição (texto, ex.: Centro Avante · Camisa 9)">
             <TextInput value={draft.position ?? ''} onChange={(e) => set('position', e.target.value)} />
           </Field>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="Função tática (campo)">
               <Select value={draft.role} onChange={(e) => set('role', e.target.value as PositionCode)}>
                 {ROLES.map((r) => (

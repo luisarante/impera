@@ -99,7 +99,7 @@ export default function Hero() {
       {/* Conteúdo */}
       <div
         ref={contentRef}
-        className="relative z-10 flex h-full flex-col items-center justify-center text-center"
+        className="relative z-10 flex h-full flex-col items-center justify-center px-6 text-center"
       >
         <Badge size={110} glow />
         <h1 className="mt-10 text-[clamp(3rem,9vw,8.5rem)] font-bold uppercase leading-[0.92] tracking-[-0.03em]">

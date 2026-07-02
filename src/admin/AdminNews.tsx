@@ -78,7 +78,7 @@ export default function AdminNews() {
       <div className="max-w-3xl">
         <PageHeader title={draft.id ? 'Editar notícia' : 'Nova notícia'} />
         <div className="space-y-5">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="Categoria (chapéu)">
               <TextInput value={draft.kicker ?? ''} onChange={(e) => set('kicker', e.target.value)} />
             </Field>
@@ -92,7 +92,7 @@ export default function AdminNews() {
           <Field label="Linha-fina (resumo curto exibido nos cards)">
             <TextArea rows={2} value={draft.lead ?? ''} onChange={(e) => set('lead', e.target.value)} />
           </Field>
-          <div className="grid grid-cols-[1fr_auto] items-start gap-4">
+          <div className="grid grid-cols-1 items-start gap-4 sm:grid-cols-[1fr_auto]">
             <ImageUpload
               bucket="news"
               label="Capa"

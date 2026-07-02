@@ -314,6 +314,9 @@ button:disabled,
   transform-style: preserve-3d;
   transition: transform 0.6s ease;
 }
+.kit-shirt.is-flipped {
+  transform: rotateY(180deg);
+}
 .kit-face {
   position: absolute;
   inset: 0;
@@ -1666,4 +1669,81 @@ button:disabled,
   float: left;
   height: 0;
   pointer-events: none;
+}
+
+/* ============================================================
+   RESPONSIVO — ajustes finos para telas pequenas.
+   Cada bloco só afeta larguras abaixo do breakpoint, preservando
+   100% do layout desktop atual.
+   ============================================================ */
+
+/* Kit Room — camisa fluida (o desktop ≥1024px mantém 440×560 fixos).
+   As larguras acompanham a altura do palco (h-[420px] < 640px < h-[520px])
+   para a camisa nunca estourar o container. */
+@media (max-width: 1023px) {
+  .kit-shirt {
+    width: min(72vw, 360px);
+    height: auto;
+    aspect-ratio: 44 / 56;
+  }
+}
+@media (max-width: 639px) {
+  .kit-shirt {
+    width: min(72vw, 290px);
+  }
+}
+
+/* Cabeçalho compartilhado das páginas internas (elenco, galeria,
+   notícias, jogos): encolhe tipografia e botões para caber em 3 colunas. */
+@media (max-width: 560px) {
+  .squad-head {
+    gap: 0.5rem;
+    padding: 0.85rem 1rem;
+  }
+  .squad-title h2 {
+    font-size: 1.15rem;
+  }
+  .squad-title .eyebrow {
+    font-size: 0.58rem;
+    letter-spacing: 0.18em;
+  }
+  .squad-back,
+  .squad-reset {
+    padding: 0.5rem 0.7rem;
+    font-size: 0.64rem;
+    letter-spacing: 0.1em;
+  }
+  .gallery-count {
+    font-size: 0.62rem;
+    letter-spacing: 0.08em;
+  }
+}
+
+/* Lightbox da galeria — setas menores e imagem maior no celular. */
+@media (max-width: 560px) {
+  .lightbox {
+    gap: 0.15rem;
+    padding: 0.75rem;
+  }
+  .lightbox__nav {
+    width: 2.25rem;
+    height: 2.25rem;
+    font-size: 1.25rem;
+  }
+  .lightbox__img {
+    max-width: 82vw;
+    max-height: 74vh;
+  }
+  .lightbox__close {
+    top: 0.5rem;
+    right: 0.5rem;
+  }
+}
+
+/* Comentários estilo YouTube — reduz o recuo das respostas no celular. */
+@media (max-width: 560px) {
+  .yt-replies,
+  .yt-replies__toggle {
+    margin-left: 2.25rem;
+  }
 }

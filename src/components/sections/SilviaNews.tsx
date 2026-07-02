@@ -21,13 +21,13 @@ export default function SilviaNews() {
   const side = news.filter((n) => n.id !== featured.id).slice(0, 2)
 
   return (
-    <section id="noticias" className="relative bg-[var(--color-ink)] px-[8vw] py-32">
-      <header className="mx-auto mb-16 flex max-w-6xl items-center justify-between">
-        <h2 className="text-4xl uppercase tracking-[-0.02em]">SilviaNews</h2>
+    <section id="noticias" className="relative bg-[var(--color-ink)] px-[8vw] py-20 md:py-32">
+      <header className="mx-auto mb-10 flex max-w-6xl flex-col items-start gap-2 md:mb-16 md:flex-row md:items-center md:justify-between">
+        <h2 className="text-3xl uppercase tracking-[-0.02em] md:text-4xl">SilviaNews</h2>
         <span className="eyebrow">A maior secadora do Impera</span>
       </header>
 
-      <div className="mx-auto grid max-w-6xl grid-cols-[3fr_2fr] gap-12">
+      <div className="mx-auto grid max-w-6xl grid-cols-1 gap-10 md:grid-cols-[3fr_2fr] md:gap-12">
         {/* Manchete principal (60%) */}
         <article
           onClick={() => navigate(`/noticias/${featured.id}`)}
@@ -90,7 +90,7 @@ export default function SilviaNews() {
         </div>
       </div>
 
-      <div className="mx-auto mt-16 flex max-w-6xl justify-center">
+      <div className="mx-auto mt-12 flex max-w-6xl justify-center md:mt-16">
         <GhostButton cursorLabel="Ver notícias" onClick={() => navigate('/noticias')}>
           Ver Todas as Notícias →
         </GhostButton>

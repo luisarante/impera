@@ -72,7 +72,7 @@ export default function AdminKits() {
       <div className="max-w-2xl">
         <PageHeader title={draft.id ? 'Editar kit' : 'Novo kit'} />
         <div className="space-y-5">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="Rótulo (ex.: Kit I)">
               <TextInput value={draft.label ?? ''} onChange={(e) => set('label', e.target.value)} />
             </Field>
@@ -87,7 +87,7 @@ export default function AdminKits() {
               onChange={(e) => set('description', e.target.value)}
             />
           </Field>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <Field label="Preço (ex.: R$ 299,90)">
               <TextInput value={draft.price ?? ''} onChange={(e) => set('price', e.target.value)} />
             </Field>
@@ -108,7 +108,7 @@ export default function AdminKits() {
               />
             </Field>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <ImageUpload
               bucket="kits"
               label="Foto frente"
