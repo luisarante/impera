@@ -3,6 +3,7 @@ import { removeImage } from '../lib/supabase'
 import { useTable } from './useTable'
 import { Button, Card, Field, ImageUpload, PageHeader, TextArea, TextInput } from './ui'
 import { useConfirm, useToast } from './feedback'
+import { requestNewsDraft } from '../lib/ai'
 import RichTextEditor from './RichTextEditor'
 
 interface NewsRow {
@@ -42,9 +43,46 @@ export default function AdminNews() {
   const { rows, loading, error, insert, update, remove, nextSortOrder } = useTable<NewsRow>('news')
   const [draft, setDraft] = useState<Partial<NewsRow> | null>(null)
   const [saving, setSaving] = useState(false)
+  const [brief, setBrief] = useState('')
+  const [generating, setGenerating] = useState(false)
+  const [aiRev, setAiRev] = useState(0) // muda para forçar o editor a recarregar o corpo
 
   const set = <K extends keyof NewsRow>(key: K, value: NewsRow[K]) =>
     setDraft((d) => (d ? { ...d, [key]: value } : d))
+
+  // Abre um rascunho (novo ou existente) já limpando o briefing e remontando o editor.
+  function openDraft(next: Partial<NewsRow>) {
+    setBrief('')
+    setAiRev((n) => n + 1)
+    setDraft(next)
+  }
+
+  // Feature B: gera todos os campos a partir de um briefing curto (com revisão humana).
+  async function generateFromBrief() {
+    const text = brief.trim()
+    if (!text) return
+    setGenerating(true)
+    try {
+      const d = await requestNewsDraft(text)
+      setDraft((prev) =>
+        prev
+          ? {
+              ...prev,
+              kicker: d.kicker || prev.kicker,
+              headline: d.headline || prev.headline,
+              lead: d.lead || prev.lead,
+              content_html: d.body_html || prev.content_html,
+            }
+          : prev,
+      )
+      setAiRev((n) => n + 1) // recarrega o corpo gerado no editor TipTap
+      toast('Rascunho gerado pela IA. Revise e ajuste antes de publicar.', 'success')
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Falha ao gerar com IA.', 'error')
+    } finally {
+      setGenerating(false)
+    }
+  }
 
   async function save() {
     if (!draft) return
@@ -77,6 +115,26 @@ export default function AdminNews() {
     return (
       <div className="max-w-3xl">
         <PageHeader title={draft.id ? 'Editar notícia' : 'Nova notícia'} />
+        <Card className="mb-6 space-y-3">
+          <div>
+            <h3 className="text-sm uppercase tracking-[0.14em] text-[var(--color-accent)]">
+              Gerar com IA
+            </h3>
+            <p className="mt-1 text-xs text-[var(--text-50)]">
+              Descreva em uma ou duas frases do que é a notícia. A IA preenche categoria, manchete,
+              linha-fina e corpo — você revisa e ajusta antes de salvar.
+            </p>
+          </div>
+          <TextArea
+            rows={3}
+            placeholder="Ex.: Empate de virada contra o rival; dois gols nos últimos 5 minutos; time segue invicto."
+            value={brief}
+            onChange={(e) => setBrief(e.target.value)}
+          />
+          <Button variant="primary" onClick={generateFromBrief} disabled={generating || !brief.trim()}>
+            {generating ? 'Gerando…' : 'Gerar campos com IA'}
+          </Button>
+        </Card>
         <div className="space-y-5">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="Categoria (chapéu)">
@@ -114,7 +172,7 @@ export default function AdminNews() {
 
           <Field label="Corpo da matéria">
             <RichTextEditor
-              key={draft.id ?? 'new'}
+              key={`${draft.id ?? 'new'}:${aiRev}`}
               value={draft.content_html ?? ''}
               onChange={(html) => set('content_html', html)}
             />
@@ -157,7 +215,7 @@ export default function AdminNews() {
       <PageHeader
         title="Notícias"
         action={
-          <Button variant="primary" onClick={() => setDraft(blank(nextSortOrder()))}>
+          <Button variant="primary" onClick={() => openDraft(blank(nextSortOrder()))}>
             + Nova notícia
           </Button>
         }
@@ -175,7 +233,7 @@ export default function AdminNews() {
                 {n.published_at ? ` · ${new Date(n.published_at).toLocaleDateString('pt-BR')}` : ''}
               </p>
             </div>
-            <Button onClick={() => setDraft(n)}>Editar</Button>
+            <Button onClick={() => openDraft(n)}>Editar</Button>
             <Button variant="danger" onClick={() => del(n)}>
               ✕
             </Button>

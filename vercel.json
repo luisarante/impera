@@ -1,5 +1,9 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "api/ai-game-summary.js": { "maxDuration": 30 },
+    "api/ai-news-draft.js": { "maxDuration": 30 }
+  },
   "rewrites": [
     { "source": "/noticias/:id", "destination": "/api/news-og?id=:id" },
     { "source": "/(.*)", "destination": "/index.html" }

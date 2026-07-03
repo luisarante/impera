@@ -73,6 +73,8 @@ create table public.news (
   content_html text,                                -- corpo rico (HTML do editor)
   verified   boolean not null default false,
   featured   boolean not null default false,
+  ai_generated boolean not null default false,     -- gerada pela IA (ver api/ai-game-summary.js)
+  source_night_id uuid,                             -- noite de origem; FK criada apos game_nights (secao 6)
   sort_order int not null default 0,
   created_at timestamptz not null default now()
 );
@@ -468,3 +470,15 @@ drop policy if exists "match_goals_read_all" on public.match_goals;
 create policy "match_goals_read_all" on public.match_goals for select using (true);
 drop policy if exists "match_goals_write_auth" on public.match_goals;
 create policy "match_goals_write_auth" on public.match_goals for all to authenticated using (true) with check (true);
+
+-- ===========================================================================
+-- 6. Vinculo noticia -> noite (resumo automatico por IA)
+-- ===========================================================================
+-- A coluna news.source_night_id e declarada na secao 1 (a tabela news vem antes
+-- de game_nights); a FK e adicionada aqui, agora que game_nights ja existe.
+-- Garante a idempotencia do resumo automatico (uma materia por noite).
+alter table public.news
+  add constraint news_source_night_fk
+  foreign key (source_night_id) references public.game_nights(id) on delete set null;
+create index news_source_night_id_idx
+  on public.news (source_night_id) where source_night_id is not null;

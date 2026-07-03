@@ -10,6 +10,7 @@ import {
 } from '../lib/games'
 import { Button, Card, Field, PageHeader, Select, TextArea, TextInput } from './ui'
 import { useConfirm, useToast } from './feedback'
+import { requestNightSummary } from '../lib/ai'
 
 interface NightRow {
   id: string
@@ -317,6 +318,16 @@ function NightEditor({ night, onBack }: { night: NightRow; onBack: () => void })
       setWinnerId(w)
       const name = w ? players.find((p) => p.id === w)?.name ?? 'craque' : null
       toast(name ? `Votação encerrada. Craque da noite: ${name}.` : 'Votação encerrada (sem votos).', 'success')
+
+      // Resumo automático da noite pela IA → publica na SilviaNews.
+      // Não bloqueia o fluxo: se a IA falhar, a votação já está encerrada.
+      toast('Gerando resumo da noite com IA…', 'info')
+      try {
+        await requestNightSummary(night.id)
+        toast('Resumo da noite publicado na SilviaNews.', 'success')
+      } catch (aiErr) {
+        toast(aiErr instanceof Error ? aiErr.message : 'Não foi possível gerar o resumo automático.', 'error')
+      }
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Falha ao encerrar a votação.', 'error')
     } finally {
