@@ -11,12 +11,14 @@
 import { createClient } from '@supabase/supabase-js'
 import { requireAdmin } from './_auth.js'
 import { generateStructured, NEWS_SCHEMA } from './_gemini.js'
+import { VOICE } from './_persona.js'
 
-const SYSTEM = `Você é repórter da SilviaNews, a redação do Imperatrice FC (clube também chamado "Impera").
-Escreva o RESUMO DA NOITE DE JOGO em português do Brasil, em tom de crônica esportiva com a resenha do clube.
+// Voz/personalidade em _persona.js; aqui ficam só as regras de FORMATO do resumo.
+const SYSTEM = `${VOICE}
 
-Regras:
-- Use SOMENTE os fatos do JSON fornecido (placares, gols e autores, craque, votos, aproveitamento). NÃO invente nada além disso.
+Formato da saída (RESUMO DA NOITE DE JOGO, a partir do JSON de fatos):
+- Use SOMENTE os fatos do JSON fornecido (placares, gols e autores, craque, votos, aproveitamento).
+- Se o campo "acontecimentos" estiver presente, incorpore esses fatos de bastidores à narrativa — pode citar nomes e desentendimentos abertamente, no tom da resenha. Se estiver nulo, ignore.
 - kicker: exatamente "Noite de Jogo".
 - headline: manchete que capture o saldo da noite (destaque a maior vitória ou o craque).
 - lead: 1 a 2 frases com o panorama (nº de jogos, aproveitamento e craque).
@@ -40,11 +42,12 @@ async function buildNightFacts(db, nightId) {
   const { data: night } = await db.from('game_nights').select('*').eq('id', nightId).maybeSingle()
   if (!night) return null
 
-  const [matchesRes, candsRes, votesRes, playersRes] = await Promise.all([
+  const [matchesRes, candsRes, votesRes, playersRes, notesRes] = await Promise.all([
     db.from('matches').select('*').eq('night_id', nightId).order('sort_order'),
     db.from('mvp_candidates').select('player_id').eq('night_id', nightId),
     db.from('mvp_votes').select('player_id').eq('night_id', nightId),
     db.from('players').select('id,name,number,position'),
+    db.from('night_notes').select('body').eq('night_id', nightId).maybeSingle(),
   ])
   const matches = matchesRes.data ?? []
   const nameOf = new Map((playersRes.data ?? []).map((p) => [p.id, p.name]))
@@ -131,6 +134,8 @@ async function buildNightFacts(db, nightId) {
     jogadores_que_atuaram: (candsRes.data ?? [])
       .map((c) => nameOf.get(c.player_id))
       .filter(Boolean),
+    // Bastidores privados escritos pelo admin (ver night_notes / migração 011).
+    acontecimentos: (notesRes.data?.body || '').trim() || null,
   }
 }
 

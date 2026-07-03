@@ -1,7 +1,8 @@
-import { useEffect } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useClubData } from '../../lib/data/ClubDataContext'
 import { sanitizeNewsHtml } from '../../lib/sanitize'
+import { linkifyPlayers } from '../../lib/linkifyPlayers'
 import VerifiedBadge from '../ui/VerifiedBadge'
 import ShareButton from '../ui/ShareButton'
 
@@ -19,8 +20,31 @@ function formatDate(iso: string): string {
 export default function NewsArticlePage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { club, news } = useClubData()
+  const { club, news, squad } = useClubData()
   const article = news.find((n) => n.id === id) ?? null
+
+  // Nomes de jogadores citados no texto viram links para /elenco/:id.
+  const leadHtml = useMemo(
+    () => (article ? linkifyPlayers(sanitizeNewsHtml(article.lead ?? ''), squad) : ''),
+    [article, squad],
+  )
+  const bodyHtml = useMemo(
+    () => (article?.html ? linkifyPlayers(sanitizeNewsHtml(article.html), squad) : ''),
+    [article, squad],
+  )
+
+  // Clique num nome de jogador navega via SPA (sem recarregar a página).
+  const onPlayerLinkClick = useCallback(
+    (e: React.MouseEvent) => {
+      if (e.metaKey || e.ctrlKey || e.shiftKey) return // deixa abrir em nova aba
+      const a = (e.target as HTMLElement).closest('a[data-player-link]')
+      if (!a) return
+      e.preventDefault()
+      const href = a.getAttribute('href')
+      if (href) navigate(href)
+    },
+    [navigate],
+  )
 
   useEffect(() => {
     window.scrollTo(0, 0)
@@ -84,14 +108,19 @@ export default function NewsArticlePage() {
             {formatDate(article.publishedAt)}
           </p>
 
-          <p className="mt-6 text-lg leading-relaxed text-[var(--text-70)]">{article.lead}</p>
+          <p
+            className="mt-6 text-lg leading-relaxed text-[var(--text-70)]"
+            onClick={onPlayerLinkClick}
+            dangerouslySetInnerHTML={{ __html: leadHtml }}
+          />
 
           <div className="my-8 h-px w-full" style={{ background: 'var(--hairline)' }} />
 
           {article.html ? (
             <div
               className="news-content text-[var(--text-70)]"
-              dangerouslySetInnerHTML={{ __html: sanitizeNewsHtml(article.html) }}
+              onClick={onPlayerLinkClick}
+              dangerouslySetInnerHTML={{ __html: bodyHtml }}
             />
           ) : (
             <div className="news-content space-y-5 text-[var(--text-70)]">

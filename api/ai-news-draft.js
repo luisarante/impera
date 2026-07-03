@@ -9,12 +9,12 @@
 
 import { requireAdmin } from './_auth.js'
 import { generateStructured, NEWS_SCHEMA } from './_gemini.js'
+import { VOICE } from './_persona.js'
 
-const SYSTEM = `Você é editor(a) da SilviaNews, a redação do Imperatrice FC (clube também chamado "Impera").
-Escreva sempre em português do Brasil, com tom jornalístico esportivo, envolvente e com a identidade de resenha do clube — mas informativo e direto.
+// Voz/personalidade em _persona.js; aqui ficam só as regras de FORMATO da notícia.
+const SYSTEM = `${VOICE}
 
-Regras:
-- NÃO invente fatos, números, nomes de jogadores, placares ou datas que não estejam no briefing. Se algo não foi informado, não afirme.
+Formato da saída (rascunho de NOTÍCIA a partir de um briefing):
 - kicker: a categoria/chapéu, de 1 a 3 palavras (ex.: "Bastidores", "Mercado", "Tática", "Elenco").
 - headline: manchete curta e forte (até ~90 caracteres).
 - lead: linha-fina de 1 a 2 frases resumindo a matéria.

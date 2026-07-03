@@ -4,6 +4,7 @@ import { useClubData } from '../../lib/data/ClubDataContext'
 import type { Player } from '../../data/club'
 import { shareMessage } from '../../lib/share'
 import Badge from '../ui/Badge'
+import PlayerLink from '../ui/PlayerLink'
 import {
   castMvpVote,
   fetchNight,
@@ -275,7 +276,7 @@ export default function GamesPage() {
                     </span>
                     <span className="min-w-0">
                       <span className="block truncate font-semibold text-[var(--color-gold)]">
-                        {winnerPlayer.name}
+                        <PlayerLink id={winnerPlayer.id} name={winnerPlayer.name} />
                       </span>
                       <span className="block text-xs text-[var(--text-50)]">
                         Eleito o craque da noite
@@ -403,7 +404,7 @@ export default function GamesPage() {
                               )}
                             </span>
                             <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                              {player.name}
+                              <PlayerLink id={player.id} name={player.name} />
                             </span>
                             <span className="shrink-0 text-sm font-semibold tabular-nums">
                               {goals} {goals === 1 ? 'gol' : 'gols'}
@@ -491,7 +492,7 @@ export default function GamesPage() {
                     const scorerLines = [...byPlayer.entries()].map(([pid, mins]) => {
                       const name = squad.find((p) => p.id === pid)?.name ?? '—'
                       const minsTxt = mins.filter((x) => x != null).map((x) => `${x}'`).join(', ')
-                      return { name, minsTxt }
+                      return { pid, name, minsTxt }
                     })
                     const decided = m.ourScore != null && m.oppScore != null
                     const ourWin = decided && (m.ourScore as number) > (m.oppScore as number)
@@ -543,7 +544,7 @@ export default function GamesPage() {
                                 {scorerLines.map((s, i) => (
                                   <p key={i}>
                                     <span aria-hidden>⚽ </span>
-                                    {s.name}
+                                    {s.name !== '—' ? <PlayerLink id={s.pid} name={s.name} /> : s.name}
                                     {s.minsTxt ? ` ${s.minsTxt}` : ''}
                                   </p>
                                 ))}

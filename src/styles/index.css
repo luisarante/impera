@@ -1629,6 +1629,13 @@ button:disabled,
   text-decoration: underline;
   text-underline-offset: 2px;
 }
+/* Link para a página do jogador (nomes citados em textos, ex.: linha-fina) */
+.player-link {
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
 .news-content ul,
 .news-content ol {
   padding-left: 1.4em;

@@ -482,3 +482,20 @@ alter table public.news
   foreign key (source_night_id) references public.game_nights(id) on delete set null;
 create index news_source_night_id_idx
   on public.news (source_night_id) where source_night_id is not null;
+
+-- ===========================================================================
+-- 7. Acontecimentos (bastidores) privados por noite (ver migracao 011)
+-- ===========================================================================
+-- Texto livre so para a IA usar no resumo automatico. PRIVADO: RLS libera so
+-- para autenticado (admin); anon nao tem policy => nao le. A funcao de IA le
+-- com a service role (bypassa RLS).
+create table public.night_notes (
+  night_id   uuid primary key references public.game_nights(id) on delete cascade,
+  body       text not null default '',
+  updated_at timestamptz not null default now()
+);
+
+alter table public.night_notes enable row level security;
+drop policy if exists "night_notes_rw_auth" on public.night_notes;
+create policy "night_notes_rw_auth" on public.night_notes
+  for all to authenticated using (true) with check (true);

@@ -229,19 +229,23 @@ function NightEditor({ night, onBack }: { night: NightRow; onBack: () => void })
   const [mvpStatus, setMvpStatus] = useState<MvpStatus>(night.mvp_status)
   const [winnerId, setWinnerId] = useState<string | null>(night.mvp_winner_id)
   const [busy, setBusy] = useState(false)
+  const [happenings, setHappenings] = useState('') // bastidores privados (night_notes)
+  const [savingNotes, setSavingNotes] = useState(false)
 
   const load = useCallback(async () => {
-    const [m, e, p, c] = await Promise.all([
+    const [m, e, p, c, notes] = await Promise.all([
       supabase.from('matches').select('*').eq('night_id', night.id).order('sort_order'),
       supabase.from('night_events').select('*').eq('night_id', night.id).order('sort_order'),
       supabase.from('players').select('id,name,number,position').order('sort_order'),
       supabase.from('mvp_candidates').select('player_id').eq('night_id', night.id),
+      supabase.from('night_notes').select('body').eq('night_id', night.id).maybeSingle(),
     ])
     const matchList = (m.data as MatchRow[]) ?? []
     setMatches(matchList)
     setEvents((e.data as EventRow[]) ?? [])
     setPlayers((p.data as PlayerRow[]) ?? [])
     setCandidates(new Set((c.data ?? []).map((r) => r.player_id as string)))
+    setHappenings((notes.data as { body?: string } | null)?.body ?? '')
 
     // Gols do Imperatrice, agrupados por partida.
     const ids = matchList.map((x) => x.id)
@@ -278,6 +282,40 @@ function NightEditor({ night, onBack }: { night: NightRow; onBack: () => void })
       toast(ok, 'success')
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Falha na operação.', 'error')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // Salva os bastidores privados desta noite (upsert em night_notes).
+  async function saveHappenings() {
+    setSavingNotes(true)
+    try {
+      const { error } = await supabase
+        .from('night_notes')
+        .upsert(
+          { night_id: night.id, body: happenings, updated_at: new Date().toISOString() },
+          { onConflict: 'night_id' },
+        )
+      if (error) throw new Error(error.message)
+      toast('Acontecimentos salvos.', 'success')
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Falha ao salvar os acontecimentos.', 'error')
+    } finally {
+      setSavingNotes(false)
+    }
+  }
+
+  // Gera (ou atualiza) o resumo da noite pela IA — usa os acontecimentos já salvos.
+  async function regenerateSummary() {
+    if (busy) return
+    setBusy(true)
+    toast('Gerando resumo da noite com IA…', 'info')
+    try {
+      await requestNightSummary(night.id)
+      toast('Resumo da noite publicado/atualizado na SilviaNews.', 'success')
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Falha ao gerar o resumo.', 'error')
     } finally {
       setBusy(false)
     }
@@ -475,7 +513,7 @@ function NightEditor({ night, onBack }: { night: NightRow; onBack: () => void })
             )}
 
             {mvpStatus === 'encerrada' && (
-              <div className="space-y-2 rounded-md border border-[var(--color-gold)] px-4 py-3">
+              <div className="space-y-3 rounded-md border border-[var(--color-gold)] px-4 py-3">
                 <p className="text-sm">
                   <span aria-hidden>👑 </span>
                   Craque da noite:{' '}
@@ -483,9 +521,14 @@ function NightEditor({ night, onBack }: { night: NightRow; onBack: () => void })
                     {winnerId ? players.find((p) => p.id === winnerId)?.name ?? '—' : 'sem votos'}
                   </strong>
                 </p>
-                <Button onClick={doReopenVoting} disabled={busy}>
-                  Reabrir votação
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="primary" onClick={regenerateSummary} disabled={busy}>
+                    Gerar/atualizar resumo com IA
+                  </Button>
+                  <Button onClick={doReopenVoting} disabled={busy}>
+                    Reabrir votação
+                  </Button>
+                </div>
               </div>
             )}
 
@@ -499,6 +542,29 @@ function NightEditor({ night, onBack }: { night: NightRow; onBack: () => void })
             </button>
           </div>
         )}
+      </Card>
+
+      {/* Acontecimentos (bastidores) — só a IA usa; não aparece no site */}
+      <Card className="mb-8 space-y-3">
+        <div>
+          <h3 className="text-sm uppercase tracking-[0.14em] text-[var(--color-accent)]">
+            Acontecimentos (bastidores)
+          </h3>
+          <p className="mt-1 text-xs text-[var(--text-50)]">
+            Coisas que não entram em estatística (desentendimentos, climão, histórias). Só a IA usa
+            isto no resumo automático da noite — <strong>não aparece no site</strong>. Preencha antes
+            de encerrar a votação (ou use “Gerar/atualizar resumo com IA” acima).
+          </p>
+        </div>
+        <TextArea
+          rows={4}
+          placeholder="Ex.: Abdelah e Velinho discutiram no intervalo depois do gol perdido; o clima esfriou no fim."
+          value={happenings}
+          onChange={(e) => setHappenings(e.target.value)}
+        />
+        <Button onClick={saveHappenings} disabled={savingNotes}>
+          {savingNotes ? 'Salvando…' : 'Salvar acontecimentos'}
+        </Button>
       </Card>
 
       {/* Partidas */}
