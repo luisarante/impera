@@ -7,6 +7,8 @@ interface ClubRow {
   badge_name: string
   tagline: string
   eternal_motto: string
+  season_label: string | null
+  season_start: string | null
 }
 
 export default function AdminClub() {
@@ -19,7 +21,7 @@ export default function AdminClub() {
   useEffect(() => {
     supabase
       .from('club')
-      .select('name, badge_name, tagline, eternal_motto')
+      .select('name, badge_name, tagline, eternal_motto, season_label, season_start')
       .eq('id', 1)
       .single()
       .then(({ data, error }) => {
@@ -37,7 +39,12 @@ export default function AdminClub() {
     setSaving(true)
     setSaved(false)
     setError(null)
-    const { error } = await supabase.from('club').update(form).eq('id', 1)
+    const payload = {
+      ...form,
+      season_label: form.season_label || null,
+      season_start: form.season_start || null, // '' → null (coluna date)
+    }
+    const { error } = await supabase.from('club').update(payload).eq('id', 1)
     if (error) setError(error.message)
     else setSaved(true)
     setSaving(false)
@@ -62,6 +69,26 @@ export default function AdminClub() {
         <Field label="Lema eterno">
           <TextInput value={form.eternal_motto} onChange={(e) => set('eternal_motto', e.target.value)} />
         </Field>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field label="Temporada atual (rótulo, ex.: Temporada 2026)">
+            <TextInput
+              value={form.season_label ?? ''}
+              onChange={(e) => set('season_label', e.target.value)}
+            />
+          </Field>
+          <Field label="Início da temporada (recorte das estatísticas)">
+            <TextInput
+              type="date"
+              value={form.season_start ?? ''}
+              onChange={(e) => set('season_start', e.target.value)}
+            />
+          </Field>
+        </div>
+        <p className="text-xs text-[var(--text-50)]">
+          A página <strong>/estatisticas</strong> conta só as noites a partir dessa data. Deixe o
+          início em branco para contar todas as noites.
+        </p>
 
         {error && <p className="text-sm text-[var(--color-alert)]">{error}</p>}
         {saved && <p className="text-sm text-[var(--color-accent)]">Salvo!</p>}

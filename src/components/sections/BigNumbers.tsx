@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom'
 import { useClubData } from '../../lib/data/ClubDataContext'
 import Counter from '../ui/Counter'
 
@@ -8,8 +9,9 @@ import Counter from '../ui/Counter'
  */
 export default function BigNumbers() {
   const { bigNumbers } = useClubData()
+  const navigate = useNavigate()
   return (
-    <section className="relative flex min-h-screen items-center bg-[var(--color-ink)] px-[8vw] py-24 md:py-40">
+    <section className="relative flex min-h-screen flex-col items-center justify-center bg-[var(--color-ink)] px-[8vw] py-24 md:py-40">
       <div className="mx-auto grid w-full max-w-6xl grid-cols-1 gap-y-12 md:grid-cols-3 md:gap-x-[6vw] md:gap-y-0">
         {bigNumbers.map((n, i) => (
           <div
@@ -32,6 +34,14 @@ export default function BigNumbers() {
           </div>
         ))}
       </div>
+      <button
+        type="button"
+        data-cursor="Estatísticas"
+        onClick={() => navigate('/estatisticas')}
+        className="mt-16 rounded-full border border-[var(--hairline)] px-8 py-4 text-sm font-semibold uppercase tracking-[0.16em] text-[var(--text-70)] transition-colors hover:border-[var(--color-gold)] hover:text-white"
+      >
+        Estatísticas completas da temporada →
+      </button>
     </section>
   )
 }

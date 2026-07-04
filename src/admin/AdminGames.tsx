@@ -217,9 +217,13 @@ function NightEditor({ night, onBack }: { night: NightRow; onBack: () => void })
   const [players, setPlayers] = useState<PlayerRow[]>([])
   const [candidates, setCandidates] = useState<Set<string>>(new Set())
   const [goals, setGoals] = useState<
-    Record<string, { id: string; player_id: string; minute: number | null }[]>
+    Record<
+      string,
+      { id: string; player_id: string | null; assist_id: string | null; minute: number | null; team: 'nos' | 'adv' }[]
+    >
   >({})
   const [goalSel, setGoalSel] = useState<Record<string, string>>({})
+  const [goalAssist, setGoalAssist] = useState<Record<string, string>>({})
   const [goalMin, setGoalMin] = useState<Record<string, string>>({})
   const [matchDraft, setMatchDraft] = useState<Partial<MatchRow> | null>(null)
   const [eventDraft, setEventDraft] = useState<Partial<EventRow> | null>(null)
@@ -247,22 +251,26 @@ function NightEditor({ night, onBack }: { night: NightRow; onBack: () => void })
     setCandidates(new Set((c.data ?? []).map((r) => r.player_id as string)))
     setHappenings((notes.data as { body?: string } | null)?.body ?? '')
 
-    // Gols do Imperatrice, agrupados por partida.
+    // Gols de cada partida (nós + adversário), em ordem cronológica.
     const ids = matchList.map((x) => x.id)
-    const map: Record<string, { id: string; player_id: string; minute: number | null }[]> = {}
+    const map: Record<
+      string,
+      { id: string; player_id: string | null; assist_id: string | null; minute: number | null; team: 'nos' | 'adv' }[]
+    > = {}
     if (ids.length) {
       const { data: g } = await supabase
         .from('match_goals')
-        .select('id, match_id, player_id, minute')
+        .select('id, match_id, player_id, minute, team, assist_id')
         .in('match_id', ids)
-        .order('minute', { ascending: true, nullsFirst: false })
         .order('sort_order')
       for (const row of g ?? []) {
         const mid = row.match_id as string
         ;(map[mid] ??= []).push({
           id: row.id as string,
-          player_id: row.player_id as string,
+          player_id: (row.player_id as string) ?? null,
+          assist_id: (row.assist_id as string) ?? null,
           minute: (row.minute as number) ?? null,
+          team: (row.team as 'nos' | 'adv') ?? 'nos',
         })
       }
     }
@@ -403,24 +411,50 @@ function NightEditor({ night, onBack }: { night: NightRow; onBack: () => void })
     toast('Partida salva.', 'success')
   }
 
-  async function addGoal(matchId: string, playerId: string, minuteStr: string) {
-    if (!playerId) return
+  // Adiciona um gol (nosso ou do adversário) E incrementa o placar da partida.
+  // Gol nosso pode ter autor + minuto, ou ficar sem autor (o bot marcou).
+  async function addGoal(
+    matchId: string,
+    team: 'nos' | 'adv',
+    playerId: string,
+    assistId: string,
+    minuteStr: string,
+  ) {
+    const match = matches.find((x) => x.id === matchId)
+    if (!match) return
     const list = goals[matchId] ?? []
     const minute = minuteStr.trim() === '' ? null : Number(minuteStr)
-    const { error } = await supabase
-      .from('match_goals')
-      .insert({ match_id: matchId, player_id: playerId, minute, sort_order: list.length + 1 })
+    const { error } = await supabase.from('match_goals').insert({
+      match_id: matchId,
+      player_id: team === 'nos' ? playerId || null : null,
+      assist_id: team === 'nos' ? assistId || null : null,
+      team,
+      minute,
+      sort_order: list.length + 1,
+    })
     if (error) {
       toast(error.message, 'error')
       return
     }
+    // O gol é a fonte da verdade no ao vivo: o placar sobe junto.
+    const col = team === 'nos' ? 'our_score' : 'opp_score'
+    const current = (team === 'nos' ? match.our_score : match.opp_score) ?? 0
+    await supabase.from('matches').update({ [col]: current + 1 }).eq('id', matchId)
     setGoalSel((s) => ({ ...s, [matchId]: '' }))
+    setGoalAssist((s) => ({ ...s, [matchId]: '' }))
     setGoalMin((s) => ({ ...s, [matchId]: '' }))
     await load()
   }
 
-  async function removeGoal(goalId: string) {
+  // Remove um gol e desconta o placar da partida (nunca abaixo de zero).
+  async function removeGoal(matchId: string, team: 'nos' | 'adv', goalId: string) {
     await supabase.from('match_goals').delete().eq('id', goalId)
+    const match = matches.find((x) => x.id === matchId)
+    if (match) {
+      const col = team === 'nos' ? 'our_score' : 'opp_score'
+      const current = (team === 'nos' ? match.our_score : match.opp_score) ?? 0
+      await supabase.from('matches').update({ [col]: Math.max(0, current - 1) }).eq('id', matchId)
+    }
     await load()
   }
 
@@ -626,9 +660,9 @@ function NightEditor({ night, onBack }: { night: NightRow; onBack: () => void })
         <div className="space-y-3">
           {matches.map((m) => {
             const mGoals = goals[m.id] ?? []
-            const attributed = mGoals.length
-            const full = m.our_score != null && attributed >= m.our_score
-            const over = m.our_score != null && attributed > m.our_score
+            const ourGoals = mGoals.filter((g) => g.team === 'nos')
+            const advGoals = mGoals.filter((g) => g.team === 'adv')
+            const isLiveMatch = m.status === 'ao_vivo'
             return (
               <Card key={m.id} className="space-y-3">
                 <div className="flex items-center gap-3">
@@ -658,29 +692,37 @@ function NightEditor({ night, onBack }: { night: NightRow; onBack: () => void })
                   </Button>
                 </div>
 
-                {/* Gols do Imperatrice (só jogadores do elenco; bots não contam) */}
+                {/* Gols da partida — botão rápido +Gol (nós/adversário) para o AO VIVO.
+                    Cada +Gol registra o lance E sobe o placar. Gol nosso pode ter
+                    autor + minuto, ou ficar sem autor (o bot marcou). */}
                 <div className="rounded-md border border-[var(--hairline)] p-3">
                   <p className="mb-2 text-xs uppercase tracking-[0.12em] text-[var(--text-50)]">
-                    Gols do Imperatrice
-                    {m.our_score != null ? ` — ${attributed}/${m.our_score} atribuídos` : ` — ${attributed}`}
+                    Gols da partida
                   </p>
 
-                  {mGoals.length > 0 && (
-                    <div className="mb-3 flex flex-wrap gap-2">
-                      {mGoals.map((g) => {
-                        const name = players.find((p) => p.id === g.player_id)?.name ?? '—'
+                  {ourGoals.length > 0 && (
+                    <div className="mb-2 flex flex-wrap gap-2">
+                      {ourGoals.map((g) => {
+                        const name = g.player_id
+                          ? players.find((p) => p.id === g.player_id)?.name ?? '—'
+                          : 'Sem autor'
                         return (
                           <span
                             key={g.id}
-                            className="inline-flex items-center gap-1.5 rounded-full border border-[var(--hairline)] px-3 py-1 text-xs"
+                            className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-accent)] px-3 py-1 text-xs"
                           >
                             {name}
+                            {g.assist_id && (
+                              <span className="text-[var(--text-50)]">
+                                assist {players.find((p) => p.id === g.assist_id)?.name ?? '—'}
+                              </span>
+                            )}
                             {g.minute != null && (
                               <span className="text-[var(--color-accent)]">{g.minute}'</span>
                             )}
                             <button
                               type="button"
-                              onClick={() => removeGoal(g.id)}
+                              onClick={() => removeGoal(m.id, 'nos', g.id)}
                               className="text-[var(--text-50)] transition-colors hover:text-[var(--color-alert)]"
                               aria-label={`Remover gol de ${name}`}
                             >
@@ -692,17 +734,56 @@ function NightEditor({ night, onBack }: { night: NightRow; onBack: () => void })
                     </div>
                   )}
 
+                  {advGoals.length > 0 && (
+                    <div className="mb-3 flex flex-wrap gap-2">
+                      {advGoals.map((g) => (
+                        <span
+                          key={g.id}
+                          className="inline-flex items-center gap-1.5 rounded-full border border-[var(--hairline)] px-3 py-1 text-xs text-[var(--text-50)]"
+                        >
+                          {m.opponent}
+                          {g.minute != null && <span>{g.minute}'</span>}
+                          <button
+                            type="button"
+                            onClick={() => removeGoal(m.id, 'adv', g.id)}
+                            className="transition-colors hover:text-[var(--color-alert)]"
+                            aria-label="Remover gol do adversário"
+                          >
+                            ✕
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
                   <div className="flex flex-wrap items-end gap-2">
                     <label className="flex-1">
                       <span className="mb-1 block text-[0.65rem] uppercase tracking-[0.14em] text-[var(--text-50)]">
-                        Quem marcou
+                        Quem marcou (vazio = sem autor)
                       </span>
                       <Select
                         value={goalSel[m.id] ?? ''}
                         onChange={(e) => setGoalSel((s) => ({ ...s, [m.id]: e.target.value }))}
-                        className="min-w-[180px]"
+                        className="min-w-[150px]"
                       >
-                        <option value="">Escolher jogador…</option>
+                        <option value="">Sem autor (bot)</option>
+                        {players.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name} {p.number}
+                          </option>
+                        ))}
+                      </Select>
+                    </label>
+                    <label className="flex-1">
+                      <span className="mb-1 block text-[0.65rem] uppercase tracking-[0.14em] text-[var(--text-50)]">
+                        Assistência (opcional)
+                      </span>
+                      <Select
+                        value={goalAssist[m.id] ?? ''}
+                        onChange={(e) => setGoalAssist((s) => ({ ...s, [m.id]: e.target.value }))}
+                        className="min-w-[150px]"
+                      >
+                        <option value="">Sem assistência</option>
                         {players.map((p) => (
                           <option key={p.id} value={p.id}>
                             {p.name} {p.number}
@@ -725,22 +806,22 @@ function NightEditor({ night, onBack }: { night: NightRow; onBack: () => void })
                       />
                     </label>
                     <Button
-                      onClick={() => addGoal(m.id, goalSel[m.id] ?? '', goalMin[m.id] ?? '')}
-                      disabled={!goalSel[m.id] || full}
+                      variant="primary"
+                      onClick={() =>
+                        addGoal(m.id, 'nos', goalSel[m.id] ?? '', goalAssist[m.id] ?? '', goalMin[m.id] ?? '')
+                      }
                     >
-                      + Gol
+                      + Gol nosso
+                    </Button>
+                    <Button onClick={() => addGoal(m.id, 'adv', '', '', goalMin[m.id] ?? '')}>
+                      + Gol adversário
                     </Button>
                   </div>
 
-                  {over ? (
-                    <p className="mt-2 text-xs text-[var(--color-alert)]">
-                      Mais gols atribuídos do que o placar do Imperatrice.
-                    </p>
-                  ) : full ? (
-                    <p className="mt-2 text-xs text-[var(--text-50)]">
-                      Todos os gols do placar já foram atribuídos.
-                    </p>
-                  ) : null}
+                  <p className="mt-2 text-xs text-[var(--text-50)]">
+                    O <strong>+Gol</strong> já atualiza o placar{isLiveMatch ? ' ao vivo' : ''}. Dá
+                    para ajustar o placar manualmente em “Editar”.
+                  </p>
                 </div>
               </Card>
             )

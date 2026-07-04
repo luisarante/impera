@@ -8,6 +8,7 @@ import GalleryPage from './components/gallery/GalleryPage'
 import NewsPage from './components/news/NewsPage'
 import NewsArticlePage from './components/news/NewsArticlePage'
 import GamesPage from './components/games/GamesPage'
+import StatsPage from './components/stats/StatsPage'
 import { AuthProvider } from './admin/auth'
 import RequireAuth from './admin/RequireAuth'
 
@@ -50,6 +51,7 @@ export default function App() {
           <Route path="/noticias/:id" element={<Public><NewsArticlePage /></Public>} />
           <Route path="/jogos" element={<Public><GamesPage /></Public>} />
           <Route path="/jogos/:id" element={<Public><GamesPage /></Public>} />
+          <Route path="/estatisticas" element={<Public><StatsPage /></Public>} />
 
           {/* Painel admin */}
           <Route path="/admin/login" element={<AdminLogin />} />

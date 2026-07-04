@@ -17,6 +17,7 @@
     "@tiptap/pm": "^3.27.1",
     "@tiptap/react": "^3.27.1",
     "@tiptap/starter-kit": "^3.27.1",
+    "@vercel/og": "^0.11.1",
     "dompurify": "^3.4.11",
     "gsap": "^3.13.0",
     "lenis": "^1.1.18",

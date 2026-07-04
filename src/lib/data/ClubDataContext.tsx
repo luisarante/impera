@@ -63,6 +63,7 @@ function mapNews(row: Record<string, unknown>): NewsItem {
     body: (row.body as string[]) ?? [],
     verified: (row.verified as boolean) ?? false,
     featured: (row.featured as boolean) ?? false,
+    sourceNightId: (row.source_night_id as string) ?? null,
   }
 }
 
@@ -157,6 +158,8 @@ async function loadClubData(): Promise<ClubData> {
       badgeName: c.badge_name as string,
       tagline: c.tagline as string,
       eternalMotto: c.eternal_motto as string,
+      seasonLabel: (c.season_label as string) ?? null,
+      seasonStart: (c.season_start as string) ?? null,
     },
     squad,
     pillars: squad.filter((p) => p.isPillar),

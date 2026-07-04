@@ -40,7 +40,9 @@ create table public.club (
   name         text not null,
   badge_name   text not null,
   tagline      text not null,
-  eternal_motto text not null
+  eternal_motto text not null,
+  season_label text,                 -- rótulo da temporada atual (ex.: "Temporada 2026")
+  season_start date                  -- recorte da temporada nas estatísticas (nulo = tudo)
 );
 
 -- Elenco (pilares + restante, unificados via is_pillar)
@@ -458,7 +460,9 @@ create policy "mvp_votes_delete_anyone" on public.mvp_votes for delete to anon, 
 create table public.match_goals (
   id         uuid primary key default gen_random_uuid(),
   match_id   uuid not null references public.matches(id) on delete cascade,
-  player_id  text not null references public.players(id) on delete cascade,
+  player_id  text references public.players(id) on delete cascade,   -- nulo = sem autor (bot) ou gol do adversario
+  team       text not null default 'nos' check (team in ('nos','adv')),
+  assist_id  text references public.players(id) on delete set null,   -- quem deu a assistencia (so gol nosso)
   minute     int,
   sort_order int not null default 0,
   created_at timestamptz not null default now()
@@ -499,3 +503,29 @@ alter table public.night_notes enable row level security;
 drop policy if exists "night_notes_rw_auth" on public.night_notes;
 create policy "night_notes_rw_auth" on public.night_notes
   for all to authenticated using (true) with check (true);
+
+-- ===========================================================================
+-- 8. Realtime — noites de jogo AO VIVO na pagina /jogos (ver migracao 013)
+-- ===========================================================================
+-- Publica as tabelas das noites para os visitantes receberem placar, gols e
+-- votacao em tempo real (leitura ja liberada pela RLS read_all).
+do $$
+begin
+  if not exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
+    create publication supabase_realtime;
+  end if;
+end $$;
+
+do $$
+declare t text;
+begin
+  foreach t in array array['game_nights','matches','match_goals','night_events','mvp_candidates','mvp_votes']
+  loop
+    if not exists (
+      select 1 from pg_publication_tables
+      where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t
+    ) then
+      execute format('alter publication supabase_realtime add table public.%I', t);
+    end if;
+  end loop;
+end $$;

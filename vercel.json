@@ -1,7 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "functions": {
-    "api/ai-game-summary.js": { "maxDuration": 30 },
+    "api/ai-game-summary.js": { "maxDuration": 30, "includeFiles": "api/assets/**" },
     "api/ai-news-draft.js": { "maxDuration": 30 }
   },
   "rewrites": [

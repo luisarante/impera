@@ -5,6 +5,7 @@ import type { Player } from '../../data/club'
 import { shareMessage } from '../../lib/share'
 import Badge from '../ui/Badge'
 import PlayerLink from '../ui/PlayerLink'
+import { supabase } from '../../lib/supabase'
 import {
   castMvpVote,
   fetchNight,
@@ -22,6 +23,7 @@ interface NightSummary {
   draws: number
   losses: number
   topScorers: { player: Player; goals: number }[] // top 5 goleadores da noite
+  topAssisters: { player: Player; assists: number }[] // top 5 garçons da noite
   biggestRout: { match: Match; margin: number } | null // maior goleada (por saldo)
 }
 
@@ -38,9 +40,14 @@ function buildNightSummary(matches: Match[], squad: Player[]): NightSummary {
   let matchesPlayed = 0
   let biggestRout: { match: Match; margin: number } | null = null
   const scorerCount = new Map<string, number>()
+  const assistCount = new Map<string, number>()
 
   for (const m of matches) {
-    for (const g of m.goals) scorerCount.set(g.playerId, (scorerCount.get(g.playerId) ?? 0) + 1)
+    for (const g of m.goals) {
+      if (g.team !== 'nos') continue
+      if (g.playerId) scorerCount.set(g.playerId, (scorerCount.get(g.playerId) ?? 0) + 1)
+      if (g.assistId) assistCount.set(g.assistId, (assistCount.get(g.assistId) ?? 0) + 1)
+    }
 
     if (m.ourScore == null || m.oppScore == null) continue
     matchesPlayed += 1
@@ -60,7 +67,23 @@ function buildNightSummary(matches: Match[], squad: Player[]): NightSummary {
     .sort((a, b) => b.goals - a.goals)
     .slice(0, 5)
 
-  return { matchesPlayed, goalsFor, goalsAgainst, wins, draws, losses, topScorers, biggestRout }
+  const topAssisters = [...assistCount.entries()]
+    .map(([pid, assists]) => ({ player: squad.find((p) => p.id === pid), assists }))
+    .filter((x): x is { player: Player; assists: number } => Boolean(x.player))
+    .sort((a, b) => b.assists - a.assists)
+    .slice(0, 5)
+
+  return {
+    matchesPlayed,
+    goalsFor,
+    goalsAgainst,
+    wins,
+    draws,
+    losses,
+    topScorers,
+    topAssisters,
+    biggestRout,
+  }
 }
 
 function StatTile({ label, value, gold }: { label: string; value: string | number; gold?: boolean }) {
@@ -125,7 +148,7 @@ const STATUS_LABEL: Record<Match['status'], string> = {
 export default function GamesPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { club, squad } = useClubData()
+  const { club, squad, news } = useClubData()
 
   const [nights, setNights] = useState<GameNight[]>([])
   const [data, setData] = useState<NightData | null>(null)
@@ -134,6 +157,8 @@ export default function GamesPage() {
   const [voting, setVoting] = useState(false)
   // Numa noite encerrada, as partidas ficam recolhidas atrás de um botão.
   const [showResults, setShowResults] = useState(false)
+  // "Lances da noite" (feed ao vivo) recolhível.
+  const [lancesOpen, setLancesOpen] = useState(true)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -154,6 +179,41 @@ export default function GamesPage() {
     setShowResults(false)
     load()
   }, [load])
+
+  // AO VIVO: assina as mudanças da noite atual (Supabase Realtime) e recarrega
+  // EM SILÊNCIO (sem "Carregando…") quando o admin edita placar/gols ou a
+  // votação de craque muda — os visitantes veem tudo atualizar sozinho.
+  const nightId = data?.night.id ?? null
+  useEffect(() => {
+    if (!nightId) return
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const refresh = async () => {
+      try {
+        setData(await fetchNight(nightId))
+      } catch {
+        /* falha transitória de rede — mantém o que já está na tela */
+      }
+    }
+    // Junta rajadas de eventos num único recarregamento.
+    const bump = () => {
+      clearTimeout(timer)
+      timer = setTimeout(refresh, 250)
+    }
+    const channel = supabase
+      .channel(`live-night-${nightId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'game_nights', filter: `id=eq.${nightId}` }, bump)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'matches', filter: `night_id=eq.${nightId}` }, bump)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'night_events', filter: `night_id=eq.${nightId}` }, bump)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'mvp_candidates', filter: `night_id=eq.${nightId}` }, bump)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'mvp_votes', filter: `night_id=eq.${nightId}` }, bump)
+      // match_goals não tem night_id; sem filtro (volume baixo) e recarrega mesmo assim.
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'match_goals' }, bump)
+      .subscribe()
+    return () => {
+      clearTimeout(timer)
+      supabase.removeChannel(channel)
+    }
+  }, [nightId])
 
   async function vote(playerId: string) {
     if (!data || data.night.mvpStatus !== 'aberta' || voting) return
@@ -178,6 +238,14 @@ export default function GamesPage() {
 
   // Estado da votação de craque: só aparece na página depois de aberta.
   const votingOpen = data?.night.mvpStatus === 'aberta'
+  const isLive = data
+    ? data.night.mvpStatus === 'aberta' || data.matches.some((m) => m.status === 'ao_vivo')
+    : false
+  const summaryNews = data ? news.find((n) => n.sourceNightId === data.night.id) ?? null : null
+  // Feed cronológico de gols da noite (todas as partidas) para o timeline ao vivo.
+  const goalFeed = data
+    ? data.matches.flatMap((m) => m.goals.map((g) => ({ ...g, opponent: m.opponent })))
+    : []
   const showMvp = data ? data.night.mvpStatus !== 'nao_iniciada' : false
   const winnerPlayer =
     data && data.night.mvpStatus === 'encerrada'
@@ -240,6 +308,12 @@ export default function GamesPage() {
 
             {/* Cabeçalho da noite */}
             <div className="mb-12">
+              {isLive && (
+                <span className="mb-3 inline-flex items-center gap-2 rounded-full border border-[var(--color-alert)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--color-alert)]">
+                  <span className="h-2 w-2 rounded-full bg-[var(--color-alert)] animate-pulse" aria-hidden />
+                  Ao vivo
+                </span>
+              )}
               <h3 className="text-[clamp(1.75rem,4vw,2.75rem)] font-bold uppercase leading-tight">
                 {data.night.title}
               </h3>
@@ -247,7 +321,95 @@ export default function GamesPage() {
                 {formatDate(data.night.date)}
                 {data.night.subtitle ? ` · ${data.night.subtitle}` : ''}
               </p>
+              {summaryNews && (
+                <button
+                  type="button"
+                  data-cursor="Resumo"
+                  onClick={() => navigate(`/noticias/${summaryNews.id}`)}
+                  className="mt-4 text-sm font-semibold uppercase tracking-[0.1em] text-[var(--color-accent)] transition-opacity hover:opacity-80"
+                >
+                  Ler o resumo da noite →
+                </button>
+              )}
             </div>
+
+            {/* Feed de gols AO VIVO — retrátil, com animação clean de altura (grid-rows) */}
+            {isLive && goalFeed.length > 0 && (
+              <section className="mb-14">
+                <button
+                  type="button"
+                  onClick={() => setLancesOpen((v) => !v)}
+                  className="flex w-full items-center justify-between gap-3"
+                  aria-expanded={lancesOpen}
+                >
+                  <span className="eyebrow" style={{ color: 'var(--color-alert)' }}>
+                    Lances da noite · ao vivo
+                  </span>
+                  <span className="flex items-center gap-2 text-xs uppercase tracking-[0.14em] text-[var(--text-50)]">
+                    {lancesOpen ? 'Recolher' : `Ver (${goalFeed.length})`}
+                    <svg
+                      viewBox="0 0 24 24"
+                      width="16"
+                      height="16"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="transition-transform duration-300"
+                      style={{ transform: lancesOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}
+                      aria-hidden
+                    >
+                      <path d="M6 9l6 6 6-6" />
+                    </svg>
+                  </span>
+                </button>
+                <div
+                  className="grid transition-[grid-template-rows] duration-300 ease-out"
+                  style={{ gridTemplateRows: lancesOpen ? '1fr' : '0fr' }}
+                >
+                  <div className="overflow-hidden">
+                    <div className="mt-4 space-y-2">
+                      {[...goalFeed].reverse().map((g) => {
+                        const scorer =
+                          g.team === 'nos' && g.playerId
+                            ? squad.find((p) => p.id === g.playerId)
+                            : null
+                        return (
+                          <div
+                            key={g.id}
+                            className="goal-pop flex items-center gap-3 rounded-lg border border-[var(--hairline)] bg-white/[0.02] px-4 py-3"
+                          >
+                            <span className="text-lg" aria-hidden>
+                              ⚽
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-medium">
+                                {g.team === 'nos' ? (
+                                  scorer ? (
+                                    <span style={{ color: 'var(--color-gold)' }}>
+                                      <PlayerLink id={scorer.id} name={scorer.name} />
+                                    </span>
+                                  ) : (
+                                    <span style={{ color: 'var(--color-gold)' }}>Gol do {club.name}</span>
+                                  )
+                                ) : (
+                                  <span className="text-[var(--text-50)]">Gol do {g.opponent}</span>
+                                )}
+                              </p>
+                              <p className="truncate text-xs text-[var(--text-50)]">
+                                vs {g.opponent}
+                                {g.minute != null ? ` · ${g.minute}'` : ''}
+                              </p>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </section>
+            )}
 
             {/* Craque da Noite — aparece ACIMA dos jogos assim que a votação abre */}
             {showMvp && (
@@ -415,6 +577,44 @@ export default function GamesPage() {
                     )}
                   </div>
 
+                  {/* Top 5 garçons (assistências) da noite */}
+                  <div>
+                    <h4 className="text-sm uppercase tracking-[0.14em] text-[var(--color-gold)]">
+                      Assistências da noite
+                    </h4>
+                    {summary.topAssisters.length === 0 ? (
+                      <p className="mt-3 text-sm text-[var(--text-50)]">
+                        Nenhuma assistência registrada.
+                      </p>
+                    ) : (
+                      <ol className="mt-3 space-y-2">
+                        {summary.topAssisters.map(({ player, assists }, i) => (
+                          <li
+                            key={player.id}
+                            className="flex items-center gap-3 rounded-lg border border-[var(--hairline)] bg-white/[0.02] px-3 py-2"
+                          >
+                            <span className="w-5 shrink-0 text-center text-sm font-bold text-[var(--text-50)]">
+                              {i + 1}
+                            </span>
+                            <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[var(--hairline)] bg-black/40 text-xs">
+                              {player.photo ? (
+                                <img src={player.photo} alt="" className="h-full w-full object-cover" />
+                              ) : (
+                                player.number.replace('#', '')
+                              )}
+                            </span>
+                            <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                              <PlayerLink id={player.id} name={player.name} />
+                            </span>
+                            <span className="shrink-0 text-sm font-semibold tabular-nums">
+                              {assists} {assists === 1 ? 'assist' : 'assists'}
+                            </span>
+                          </li>
+                        ))}
+                      </ol>
+                    )}
+                  </div>
+
                   {/* Maior goleada da noite */}
                   <div>
                     <h4 className="text-sm uppercase tracking-[0.14em] text-[var(--color-gold)]">
@@ -486,6 +686,7 @@ export default function GamesPage() {
                     // Agrupa os gols por jogador preservando os minutos.
                     const byPlayer = new Map<string, (number | null)[]>()
                     for (const g of m.goals) {
+                      if (g.team !== 'nos' || !g.playerId) continue
                       if (!byPlayer.has(g.playerId)) byPlayer.set(g.playerId, [])
                       byPlayer.get(g.playerId)!.push(g.minute)
                     }

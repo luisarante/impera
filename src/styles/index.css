@@ -1636,6 +1636,20 @@ button:disabled,
   text-underline-offset: 2px;
   cursor: pointer;
 }
+/* Entrada animada de cada gol no feed AO VIVO da pagina /jogos */
+@keyframes goalPop {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.goal-pop {
+  animation: goalPop 0.45s ease both;
+}
 .news-content ul,
 .news-content ol {
   padding-left: 1.4em;

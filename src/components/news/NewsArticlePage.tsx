@@ -108,6 +108,17 @@ export default function NewsArticlePage() {
             {formatDate(article.publishedAt)}
           </p>
 
+          {article.sourceNightId && (
+            <button
+              type="button"
+              data-cursor="A noite"
+              onClick={() => navigate(`/jogos/${article.sourceNightId}`)}
+              className="mt-4 text-sm font-semibold uppercase tracking-[0.1em] text-[var(--color-accent)] transition-opacity hover:opacity-80"
+            >
+              Ver a noite completa →
+            </button>
+          )}
+
           <p
             className="mt-6 text-lg leading-relaxed text-[var(--text-70)]"
             onClick={onPlayerLinkClick}

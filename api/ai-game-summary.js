@@ -12,6 +12,7 @@ import { createClient } from '@supabase/supabase-js'
 import { requireAdmin } from './_auth.js'
 import { generateStructured, NEWS_SCHEMA } from './_gemini.js'
 import { VOICE } from './_persona.js'
+import { renderNightCoverPng } from './_nightCover.js'
 
 // Voz/personalidade em _persona.js; aqui ficam só as regras de FORMATO do resumo.
 const SYSTEM = `${VOICE}
@@ -42,26 +43,30 @@ async function buildNightFacts(db, nightId) {
   const { data: night } = await db.from('game_nights').select('*').eq('id', nightId).maybeSingle()
   if (!night) return null
 
-  const [matchesRes, candsRes, votesRes, playersRes, notesRes] = await Promise.all([
+  const [matchesRes, candsRes, votesRes, playersRes, notesRes, clubRes] = await Promise.all([
     db.from('matches').select('*').eq('night_id', nightId).order('sort_order'),
     db.from('mvp_candidates').select('player_id').eq('night_id', nightId),
     db.from('mvp_votes').select('player_id').eq('night_id', nightId),
-    db.from('players').select('id,name,number,position'),
+    db.from('players').select('id,name,number,position,photo_path'),
     db.from('night_notes').select('body').eq('night_id', nightId).maybeSingle(),
+    db.from('club').select('name,badge_name').maybeSingle(),
   ])
   const matches = matchesRes.data ?? []
-  const nameOf = new Map((playersRes.data ?? []).map((p) => [p.id, p.name]))
+  const players = playersRes.data ?? []
+  const nameOf = new Map(players.map((p) => [p.id, p.name]))
+  const numberOf = new Map(players.map((p) => [p.id, p.number]))
+  const photoOf = new Map(players.map((p) => [p.id, p.photo_path]))
 
   const matchIds = matches.map((m) => m.id)
   let goals = []
   if (matchIds.length) {
     const g = await db
       .from('match_goals')
-      .select('match_id,player_id,minute')
+      .select('match_id,player_id,minute,team')
       .in('match_id', matchIds)
-      .order('minute', { ascending: true, nullsFirst: false })
       .order('sort_order')
-    goals = g.data ?? []
+    // Só os gols NOSSOS com autor entram nos goleadores/atribuições do resumo.
+    goals = (g.data ?? []).filter((x) => x.team === 'nos' && x.player_id)
   }
 
   const goalsByMatch = new Map()
@@ -113,7 +118,7 @@ async function buildNightFacts(db, nightId) {
     ? { jogador: nameOf.get(night.mvp_winner_id) ?? 'craque', votos: votosCraque }
     : null
 
-  return {
+  const facts = {
     titulo: night.title,
     data: night.date,
     subtitulo: night.subtitle || null,
@@ -137,6 +142,15 @@ async function buildNightFacts(db, nightId) {
     // Bastidores privados escritos pelo admin (ver night_notes / migração 011).
     acontecimentos: (notesRes.data?.body || '').trim() || null,
   }
+
+  // Dados extras usados só pela ARTE da capa (não vão no prompt do texto).
+  const cover = {
+    club: clubRes.data ?? null,
+    craquePhotoPath: night.mvp_winner_id ? photoOf.get(night.mvp_winner_id) ?? null : null,
+    craqueNumber: night.mvp_winner_id ? numberOf.get(night.mvp_winner_id) ?? null : null,
+  }
+
+  return { facts, cover }
 }
 
 /** Publica (ou atualiza, se já existe) a notícia-resumo daquela noite. */
@@ -179,6 +193,51 @@ async function upsertNightNews(db, nightId, draft) {
   return inserted?.id ?? null
 }
 
+/** Baixa a foto pública de um jogador e devolve como data URI base64 (ou null). */
+async function fetchPhotoDataUri(baseUrl, path) {
+  try {
+    const r = await fetch(`${baseUrl}/storage/v1/object/public/players/${path}`)
+    if (!r.ok) return null
+    const ct = r.headers.get('content-type') || 'image/jpeg'
+    const buf = Buffer.from(await r.arrayBuffer())
+    return `data:${ct};base64,${buf.toString('base64')}`
+  } catch {
+    return null
+  }
+}
+
+/** Gera a arte PNG da noite, sobe no bucket `news` e seta cover_path na matéria. */
+async function generateAndAttachCover(db, baseUrl, newsId, nightId, facts, cover) {
+  const craquePhotoDataUri = cover.craquePhotoPath
+    ? await fetchPhotoDataUri(baseUrl, cover.craquePhotoPath)
+    : null
+
+  const png = await renderNightCoverPng({
+    club: cover.club,
+    facts: {
+      ...facts,
+      craque: facts.craque ? { ...facts.craque, number: cover.craqueNumber } : null,
+    },
+    craquePhotoDataUri,
+  })
+
+  const objectName = `night-${nightId}-${Date.now()}.png`
+  const { error: upErr } = await db.storage
+    .from('news')
+    .upload(objectName, Buffer.from(png), { contentType: 'image/png', upsert: true })
+  if (upErr) throw new Error(upErr.message)
+
+  // Troca o cover_path da matéria e limpa a capa auto-gerada anterior (cache de CDN).
+  const { data: cur } = await db.from('news').select('cover_path').eq('id', newsId).maybeSingle()
+  const { error: updErr } = await db.from('news').update({ cover_path: objectName }).eq('id', newsId)
+  if (updErr) throw new Error(updErr.message)
+
+  const prev = cur?.cover_path
+  if (prev && prev !== objectName && /^night-.*\.png$/.test(prev)) {
+    await db.storage.from('news').remove([prev]).catch(() => {})
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST')
@@ -200,8 +259,9 @@ export default async function handler(req, res) {
       auth: { persistSession: false, autoRefreshToken: false },
     })
 
-    const facts = await buildNightFacts(db, nightId)
-    if (!facts) return res.status(404).json({ error: 'Noite não encontrada.' })
+    const built = await buildNightFacts(db, nightId)
+    if (!built) return res.status(404).json({ error: 'Noite não encontrada.' })
+    const { facts, cover } = built
 
     const draft = await generateStructured({
       system: SYSTEM,
@@ -211,6 +271,12 @@ export default async function handler(req, res) {
     })
 
     const id = await upsertNightNews(db, nightId, draft)
+
+    // Capa (arte da noite) — best-effort: uma falha aqui NÃO quebra o resumo.
+    await generateAndAttachCover(db, url, id, nightId, facts, cover).catch((e) => {
+      console.error('Falha ao gerar/anexar a capa da noite:', e)
+    })
+
     return res.status(200).json({ id, ...draft })
   } catch (e) {
     return res.status(e.status || 500).json({ error: e.message || 'Falha ao gerar o resumo da noite.' })

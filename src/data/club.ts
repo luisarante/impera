@@ -13,6 +13,8 @@ export interface Club {
   badgeName: string
   tagline: string
   eternalMotto: string
+  seasonLabel: string | null // rótulo da temporada atual (ex.: "Temporada 2026")
+  seasonStart: string | null // ISO date (yyyy-mm-dd); recorte das estatísticas (nulo = tudo)
 }
 
 export interface BigNumber {
@@ -53,6 +55,7 @@ export interface NewsItem {
   body?: string[] // legado: corpo antigo em parágrafos
   verified?: boolean
   featured?: boolean
+  sourceNightId?: string | null // noite de origem (resumo automático) → link p/ /jogos/:id
 }
 
 export interface Milestone {

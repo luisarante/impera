@@ -25,8 +25,11 @@ export interface GameNight {
 }
 
 export interface Goal {
-  playerId: string
+  id: string
+  playerId: string | null // nulo = gol sem autor (bot) ou gol do adversário
+  assistId: string | null // quem deu a assistência (só gol nosso)
   minute: number | null // minuto do gol (opcional)
+  team: 'nos' | 'adv' // autor do lance: nosso time ou o adversário
 }
 
 export interface Match {
@@ -124,20 +127,25 @@ export async function fetchNight(id?: string): Promise<NightData | null> {
 
   const mappedMatches = (matches.data ?? []).map(mapMatch)
 
-  // Gols do Imperatrice por partida, em ordem de minuto (nulos por último).
+  // Gols de cada partida (nós + adversário), em ordem cronológica (sort_order).
   const matchIds = mappedMatches.map((m) => m.id)
   if (matchIds.length) {
     const { data: goals } = await supabase
       .from('match_goals')
-      .select('match_id, player_id, minute')
+      .select('id, match_id, player_id, minute, team, assist_id')
       .in('match_id', matchIds)
-      .order('minute', { ascending: true, nullsFirst: false })
       .order('sort_order')
     const byMatch = new Map<string, Goal[]>()
     for (const g of goals ?? []) {
       const mid = g.match_id as string
       if (!byMatch.has(mid)) byMatch.set(mid, [])
-      byMatch.get(mid)!.push({ playerId: g.player_id as string, minute: (g.minute as number) ?? null })
+      byMatch.get(mid)!.push({
+        id: g.id as string,
+        playerId: (g.player_id as string) ?? null,
+        assistId: (g.assist_id as string) ?? null,
+        minute: (g.minute as number) ?? null,
+        team: (g.team as 'nos' | 'adv') ?? 'nos',
+      })
     }
     for (const m of mappedMatches) m.goals = byMatch.get(m.id) ?? []
   }
