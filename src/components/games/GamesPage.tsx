@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useClubData } from '../../lib/data/ClubDataContext'
+import { useAuth } from '../../admin/auth'
 import type { Player } from '../../data/club'
 import { shareMessage } from '../../lib/share'
 import Badge from '../ui/Badge'
@@ -148,6 +149,8 @@ const STATUS_LABEL: Record<Match['status'], string> = {
 export default function GamesPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const location = useLocation()
+  const { session } = useAuth()
   const { club, squad, news } = useClubData()
 
   const [nights, setNights] = useState<GameNight[]>([])
@@ -157,8 +160,8 @@ export default function GamesPage() {
   const [voting, setVoting] = useState(false)
   // Numa noite encerrada, as partidas ficam recolhidas atrás de um botão.
   const [showResults, setShowResults] = useState(false)
-  // "Lances da noite" (feed ao vivo) recolhível.
-  const [lancesOpen, setLancesOpen] = useState(true)
+  // "Lances da noite" (feed ao vivo) recolhível — começa recolhido; abre no clique.
+  const [lancesOpen, setLancesOpen] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -217,6 +220,10 @@ export default function GamesPage() {
 
   async function vote(playerId: string) {
     if (!data || data.night.mvpStatus !== 'aberta' || voting) return
+    if (!session) {
+      navigate('/entrar', { state: { from: location.pathname } })
+      return
+    }
     setVoting(true)
     try {
       await castMvpVote(data.night.id, playerId)
@@ -508,9 +515,21 @@ export default function GamesPage() {
                         </button>
                       )
                     })}
-                    {votingOpen && (
+                    {votingOpen && session && (
                       <p className="pt-1 text-xs text-[var(--text-50)]">
                         Toque num jogador para votar. Você pode trocar seu voto a qualquer momento.
+                      </p>
+                    )}
+                    {votingOpen && !session && (
+                      <p className="pt-1 text-xs text-[var(--text-50)]">
+                        <button
+                          type="button"
+                          onClick={() => navigate('/entrar', { state: { from: location.pathname } })}
+                          className="text-[var(--color-gold)] underline"
+                        >
+                          Entre na sua conta
+                        </button>{' '}
+                        para votar no craque da noite.
                       </p>
                     )}
                   </div>

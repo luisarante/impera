@@ -6,7 +6,9 @@
 --   2. Abra "SQL Editor" no painel e cole TODO este arquivo. Clique em "Run".
 --   3. Crie os buckets de imagem e faca upload das fotos (ver supabase/README.md).
 --   4. Crie o usuario admin em Authentication > Users > "Add user"
---      (email + senha, "Auto Confirm User" marcado).
+--      (email + senha, "Auto Confirm User" marcado). O trigger cria o profile;
+--      marque-o como admin:  update public.profiles set is_admin = true
+--                            where id = '<uuid do admin>';
 --
 -- Reexecutar e seguro: o script dropa e recria tudo (idempotente).
 -- ============================================================================
@@ -22,6 +24,7 @@ drop table if exists public.night_events   cascade;
 drop table if exists public.game_nights    cascade;
 drop table if exists public.comment_likes cascade;
 drop table if exists public.player_comments cascade;
+drop table if exists public.profiles     cascade;
 drop table if exists public.players      cascade;
 drop table if exists public.news         cascade;
 drop table if exists public.gallery_photos cascade;
@@ -61,6 +64,67 @@ create table public.players (
   sort_order  int not null default 0,
   created_at  timestamptz not null default now()
 );
+
+-- Perfis da torcida (1:1 com auth.users) — cadastro/login para comentar e votar.
+-- player_id vincula o usuario a um jogador do elenco e define seu avatar.
+-- is_admin distingue o painel /admin dos torcedores comuns.
+create table public.profiles (
+  id           uuid primary key references auth.users(id) on delete cascade,
+  display_name text not null check (char_length(display_name) between 1 and 40),
+  player_id    text references public.players(id) on delete set null,
+  is_admin     boolean not null default false,
+  created_at   timestamptz not null default now(),
+  updated_at   timestamptz not null default now()
+);
+create index profiles_player_idx on public.profiles (player_id);
+
+-- Helper: o usuario atual e admin? (security definer evita recursao de RLS)
+create or replace function public.is_admin()
+returns boolean language sql security definer set search_path = public stable as $$
+  select exists (select 1 from public.profiles where id = auth.uid() and is_admin);
+$$;
+
+-- Provisiona o perfil ao criar a conta (le display_name/player_id do signUp).
+create or replace function public.handle_new_user()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  v_name text := nullif(trim(new.raw_user_meta_data ->> 'display_name'), '');
+  v_pid  text := nullif(trim(new.raw_user_meta_data ->> 'player_id'), '');
+begin
+  insert into public.profiles (id, display_name, player_id)
+  values (new.id, coalesce(v_name, split_part(new.email, '@', 1)), v_pid)
+  on conflict (id) do nothing;
+  return new;
+end;
+$$;
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users for each row execute function public.handle_new_user();
+
+-- Impede auto-promocao: so admin altera is_admin.
+create or replace function public.profiles_guard()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  new.updated_at := now();
+  -- auth.uid() nulo = contexto de servidor (SQL Editor/service role), permitido.
+  if new.is_admin is distinct from old.is_admin
+     and auth.uid() is not null and not public.is_admin() then
+    raise exception 'Apenas administradores podem alterar is_admin.';
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists trg_profiles_guard on public.profiles;
+create trigger trg_profiles_guard
+  before update on public.profiles for each row execute function public.profiles_guard();
+
+-- RLS de profiles: leitura publica; usuario edita so o proprio perfil.
+alter table public.profiles enable row level security;
+drop policy if exists "profiles_read_all" on public.profiles;
+create policy "profiles_read_all" on public.profiles for select using (true);
+drop policy if exists "profiles_update_own" on public.profiles;
+create policy "profiles_update_own" on public.profiles
+  for update to authenticated using (id = auth.uid()) with check (id = auth.uid());
 
 -- Noticias (SilviaNews)
 create table public.news (
@@ -135,7 +199,7 @@ create table public.player_comments (
   id         uuid primary key default gen_random_uuid(),
   player_id  text not null references public.players(id) on delete cascade,
   parent_id  uuid references public.player_comments(id) on delete cascade,
-  author     text not null check (char_length(author) between 1 and 40),
+  user_id    uuid not null default auth.uid() references public.profiles(id) on delete cascade,
   body       text not null check (char_length(body) between 1 and 500),
   created_at timestamptz not null default now()
 );
@@ -143,14 +207,15 @@ create index player_comments_player_idx
   on public.player_comments (player_id, created_at desc);
 create index player_comments_parent_idx
   on public.player_comments (parent_id, created_at);
+create index player_comments_user_idx on public.player_comments (user_id);
 
--- Curtidas dos comentarios: uma linha por visitante/comentario
+-- Curtidas dos comentarios: uma linha por usuario/comentario
 create table public.comment_likes (
   id         uuid primary key default gen_random_uuid(),
   comment_id uuid not null references public.player_comments(id) on delete cascade,
-  visitor_id text not null check (char_length(visitor_id) between 8 and 64),
+  user_id    uuid not null default auth.uid() references public.profiles(id) on delete cascade,
   created_at timestamptz not null default now(),
-  unique (comment_id, visitor_id)
+  unique (comment_id, user_id)
 );
 create index comment_likes_comment_idx on public.comment_likes (comment_id);
 
@@ -170,39 +235,40 @@ begin
 
     execute format('drop policy if exists "write_auth" on public.%I;', t);
     execute format(
-      'create policy "write_auth" on public.%I for all to authenticated using (true) with check (true);', t);
+      'create policy "write_auth" on public.%I for all to authenticated using (public.is_admin()) with check (public.is_admin());', t);
   end loop;
 end $$;
 
--- Comentarios: leitura e insercao por qualquer visitante; apagar so admin (moderacao).
+-- Comentarios: leitura publica; inserir logado (dono = auth.uid()); apagar o
+-- proprio comentario ou como admin (moderacao).
 alter table public.player_comments enable row level security;
 
 drop policy if exists "comments_read_all" on public.player_comments;
 create policy "comments_read_all" on public.player_comments
   for select using (true);
 
-drop policy if exists "comments_insert_anyone" on public.player_comments;
-create policy "comments_insert_anyone" on public.player_comments
-  for insert to anon, authenticated with check (true);
+drop policy if exists "comments_insert_auth" on public.player_comments;
+create policy "comments_insert_auth" on public.player_comments
+  for insert to authenticated with check (user_id = auth.uid());
 
-drop policy if exists "comments_delete_auth" on public.player_comments;
-create policy "comments_delete_auth" on public.player_comments
-  for delete to authenticated using (true);
+drop policy if exists "comments_delete_own_or_admin" on public.player_comments;
+create policy "comments_delete_own_or_admin" on public.player_comments
+  for delete to authenticated using (user_id = auth.uid() or public.is_admin());
 
--- Curtidas: leitura publica; visitante pode curtir e descurtir.
+-- Curtidas: leitura publica; curtir/descurtir logado, so as proprias.
 alter table public.comment_likes enable row level security;
 
 drop policy if exists "likes_read_all" on public.comment_likes;
 create policy "likes_read_all" on public.comment_likes
   for select using (true);
 
-drop policy if exists "likes_insert_anyone" on public.comment_likes;
-create policy "likes_insert_anyone" on public.comment_likes
-  for insert to anon, authenticated with check (true);
+drop policy if exists "likes_insert_own" on public.comment_likes;
+create policy "likes_insert_own" on public.comment_likes
+  for insert to authenticated with check (user_id = auth.uid());
 
-drop policy if exists "likes_delete_anyone" on public.comment_likes;
-create policy "likes_delete_anyone" on public.comment_likes
-  for delete to anon, authenticated using (true);
+drop policy if exists "likes_delete_own" on public.comment_likes;
+create policy "likes_delete_own" on public.comment_likes
+  for delete to authenticated using (user_id = auth.uid());
 
 -- ---------------------------------------------------------------------------
 -- 2.5 Capa unica das noticias: ao marcar uma como capa, desmarca as demais
@@ -248,15 +314,15 @@ create policy "storage_read_all" on storage.objects
 
 create policy "storage_write_auth" on storage.objects
   for insert to authenticated
-  with check (bucket_id in ('players','gallery','kits','hero','news'));
+  with check (bucket_id in ('players','gallery','kits','hero','news') and public.is_admin());
 
 create policy "storage_update_auth" on storage.objects
   for update to authenticated
-  using (bucket_id in ('players','gallery','kits','hero','news'));
+  using (bucket_id in ('players','gallery','kits','hero','news') and public.is_admin());
 
 create policy "storage_delete_auth" on storage.objects
   for delete to authenticated
-  using (bucket_id in ('players','gallery','kits','hero','news'));
+  using (bucket_id in ('players','gallery','kits','hero','news') and public.is_admin());
 
 -- ===========================================================================
 -- 4. SEED — dados atuais de src/data/club.ts
@@ -426,13 +492,13 @@ create table public.mvp_votes (
   id         uuid primary key default gen_random_uuid(),
   night_id   uuid not null references public.game_nights(id) on delete cascade,
   player_id  text not null references public.players(id) on delete cascade,
-  visitor_id text not null check (char_length(visitor_id) between 8 and 64),
+  user_id    uuid not null default auth.uid() references public.profiles(id) on delete cascade,
   created_at timestamptz not null default now(),
-  unique (night_id, visitor_id)
+  unique (night_id, user_id)
 );
 create index mvp_votes_night_idx on public.mvp_votes (night_id);
 
--- RLS: conteúdo com leitura pública + escrita admin; votos abertos ao visitante.
+-- RLS: conteúdo com leitura pública + escrita admin; votar exige login (voto próprio).
 do $$
 declare t text;
 begin
@@ -442,19 +508,19 @@ begin
     execute format('drop policy if exists "read_all" on public.%I;', t);
     execute format('create policy "read_all" on public.%I for select using (true);', t);
     execute format('drop policy if exists "write_auth" on public.%I;', t);
-    execute format('create policy "write_auth" on public.%I for all to authenticated using (true) with check (true);', t);
+    execute format('create policy "write_auth" on public.%I for all to authenticated using (public.is_admin()) with check (public.is_admin());', t);
   end loop;
 end $$;
 
 alter table public.mvp_votes enable row level security;
 drop policy if exists "mvp_votes_read_all" on public.mvp_votes;
 create policy "mvp_votes_read_all" on public.mvp_votes for select using (true);
-drop policy if exists "mvp_votes_insert_anyone" on public.mvp_votes;
-create policy "mvp_votes_insert_anyone" on public.mvp_votes for insert to anon, authenticated with check (true);
-drop policy if exists "mvp_votes_update_anyone" on public.mvp_votes;
-create policy "mvp_votes_update_anyone" on public.mvp_votes for update to anon, authenticated using (true) with check (true);
-drop policy if exists "mvp_votes_delete_anyone" on public.mvp_votes;
-create policy "mvp_votes_delete_anyone" on public.mvp_votes for delete to anon, authenticated using (true);
+drop policy if exists "mvp_votes_insert_own" on public.mvp_votes;
+create policy "mvp_votes_insert_own" on public.mvp_votes for insert to authenticated with check (user_id = auth.uid());
+drop policy if exists "mvp_votes_update_own" on public.mvp_votes;
+create policy "mvp_votes_update_own" on public.mvp_votes for update to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
+drop policy if exists "mvp_votes_delete_own" on public.mvp_votes;
+create policy "mvp_votes_delete_own" on public.mvp_votes for delete to authenticated using (user_id = auth.uid());
 
 -- Gols do Imperatrice por partida (autores; só elenco, ver migração 007)
 create table public.match_goals (
@@ -473,7 +539,7 @@ alter table public.match_goals enable row level security;
 drop policy if exists "match_goals_read_all" on public.match_goals;
 create policy "match_goals_read_all" on public.match_goals for select using (true);
 drop policy if exists "match_goals_write_auth" on public.match_goals;
-create policy "match_goals_write_auth" on public.match_goals for all to authenticated using (true) with check (true);
+create policy "match_goals_write_auth" on public.match_goals for all to authenticated using (public.is_admin()) with check (public.is_admin());
 
 -- ===========================================================================
 -- 6. Vinculo noticia -> noite (resumo automatico por IA)
@@ -502,7 +568,7 @@ create table public.night_notes (
 alter table public.night_notes enable row level security;
 drop policy if exists "night_notes_rw_auth" on public.night_notes;
 create policy "night_notes_rw_auth" on public.night_notes
-  for all to authenticated using (true) with check (true);
+  for all to authenticated using (public.is_admin()) with check (public.is_admin());
 
 -- ===========================================================================
 -- 8. Realtime — noites de jogo AO VIVO na pagina /jogos (ver migracao 013)

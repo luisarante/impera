@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { lenisScrollToEl } from '../lib/useLenis'
 import { useClubData } from '../lib/data/ClubDataContext'
 import Badge from './ui/Badge'
+import AccountMenu from './account/AccountMenu'
 
 /**
  * Navegação fixa da página inicial: leva direto às seções importantes com
@@ -76,6 +77,7 @@ export default function HomeNav() {
             {l.label}
           </button>
         ))}
+        <AccountMenu />
       </nav>
 
       <button

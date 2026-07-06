@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   COMMENTS_ENABLED,
   fetchThreads,
@@ -7,21 +8,12 @@ import {
   type CommentThread,
   type PlayerComment,
 } from '../../lib/comments'
+import { useAuth } from '../../admin/auth'
+import UserAvatar from '../ui/UserAvatar'
 
 interface PlayerCommentsProps {
   playerId: string
   playerName: string
-}
-
-const AVATAR_COLORS = [
-  '#3ea6ff', '#f28b82', '#fbbc04', '#34a853',
-  '#a142f4', '#ff6d00', '#00acc1', '#e91e63',
-]
-
-function avatarColor(name: string): string {
-  let sum = 0
-  for (let i = 0; i < name.length; i++) sum += name.charCodeAt(i)
-  return AVATAR_COLORS[sum % AVATAR_COLORS.length]
 }
 
 /** Tempo relativo em pt-BR (estilo YouTube: "há 2 dias"). */
@@ -40,24 +32,13 @@ function timeAgo(iso: string): string {
   return `há ${years} ${years > 1 ? 'anos' : 'ano'}`
 }
 
-const NAME_KEY = 'imperatrice:name'
-
-function Avatar({ name }: { name: string }) {
-  const initial = name.trim().charAt(0).toUpperCase() || '?'
-  return (
-    <span className="yt-avatar yt-avatar--sm" style={{ background: avatarColor(name || '?') }}>
-      {initial}
-    </span>
-  )
-}
-
 const ThumbUp = () => (
   <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden>
     <path d="M1 21h4V9H1v12zm22-11c0-1.1-.9-2-2-2h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L14.17 1 7.59 7.59C7.22 7.95 7 8.45 7 9v10c0 1.1.9 2 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-2z" />
   </svg>
 )
 
-/** Composer reutilizável (comentário de topo ou resposta). */
+/** Composer reutilizável (comentário de topo ou resposta) — só para logados. */
 function Composer({
   playerName,
   submitLabel,
@@ -68,32 +49,20 @@ function Composer({
   playerName: string
   submitLabel: string
   autoFocus?: boolean
-  onSubmit: (author: string, body: string) => Promise<void>
+  onSubmit: (body: string) => Promise<void>
   onCancel: () => void
 }) {
-  const [author, setAuthor] = useState(() => {
-    try {
-      return localStorage.getItem(NAME_KEY) ?? ''
-    } catch {
-      return ''
-    }
-  })
   const [body, setBody] = useState('')
   const [posting, setPosting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
-    if (!author.trim() || !body.trim()) return
+    if (!body.trim()) return
     setPosting(true)
     setError(null)
     try {
-      await onSubmit(author.trim(), body.trim())
-      try {
-        localStorage.setItem(NAME_KEY, author.trim())
-      } catch {
-        /* ignora storage indisponível */
-      }
+      await onSubmit(body.trim())
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Falha ao publicar.')
     } finally {
@@ -112,13 +81,6 @@ function Composer({
         rows={2}
         autoFocus={autoFocus}
       />
-      <input
-        className="yt-composer__name"
-        placeholder="Seu nome"
-        value={author}
-        onChange={(e) => setAuthor(e.target.value)}
-        maxLength={40}
-      />
       <div className="yt-composer__actions">
         {error && <span className="yt-composer__error">{error}</span>}
         <button type="button" className="yt-btn yt-btn--ghost" onClick={onCancel} disabled={posting}>
@@ -127,7 +89,7 @@ function Composer({
         <button
           type="submit"
           className="yt-btn yt-btn--primary"
-          disabled={posting || !author.trim() || !body.trim()}
+          disabled={posting || !body.trim()}
         >
           {posting ? 'Enviando…' : submitLabel}
         </button>
@@ -137,12 +99,20 @@ function Composer({
 }
 
 export default function PlayerComments({ playerId, playerName }: PlayerCommentsProps) {
+  const { session, profile } = useAuth()
+  const navigate = useNavigate()
+  const location = useLocation()
+  const loggedIn = !!session
+
   const [threads, setThreads] = useState<CommentThread[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [composingTop, setComposingTop] = useState(false)
   const [replyingTo, setReplyingTo] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
+
+  // Redireciona para o login preservando a página atual (volta após entrar).
+  const goLogin = () => navigate('/entrar', { state: { from: location.pathname } })
 
   useEffect(() => {
     let alive = true
@@ -173,6 +143,7 @@ export default function PlayerComments({ playerId, playerName }: PlayerCommentsP
   }
 
   async function onLike(c: PlayerComment) {
+    if (!loggedIn) return goLogin()
     const like = !c.likedByMe
     updateComment(c.id, (x) => ({ ...x, likedByMe: like, likeCount: x.likeCount + (like ? 1 : -1) }))
     try {
@@ -183,14 +154,14 @@ export default function PlayerComments({ playerId, playerName }: PlayerCommentsP
     }
   }
 
-  async function addTop(author: string, body: string) {
-    const created = await postComment({ playerId, author, body })
+  async function addTop(body: string) {
+    const created = await postComment({ playerId, body })
     setThreads((prev) => [{ comment: created, replies: [] }, ...prev])
     setComposingTop(false)
   }
 
-  async function addReply(parentId: string, author: string, body: string) {
-    const created = await postComment({ playerId, author, body, parentId })
+  async function addReply(parentId: string, body: string) {
+    const created = await postComment({ playerId, body, parentId })
     setThreads((prev) =>
       prev.map((t) => (t.comment.id === parentId ? { ...t, replies: [...t.replies, created] } : t)),
     )
@@ -210,7 +181,7 @@ export default function PlayerComments({ playerId, playerName }: PlayerCommentsP
   function renderComment(c: PlayerComment, canReply: boolean) {
     return (
       <div className="yt-comment">
-        <Avatar name={c.author} />
+        <UserAvatar name={c.author} avatarUrl={c.avatarUrl} />
         <div className="yt-comment__main">
           <header className="yt-comment__head">
             <span className="yt-comment__author">{c.author}</span>
@@ -231,7 +202,9 @@ export default function PlayerComments({ playerId, playerName }: PlayerCommentsP
               <button
                 type="button"
                 className="yt-react yt-react--text"
-                onClick={() => setReplyingTo((id) => (id === c.id ? null : c.id))}
+                onClick={() =>
+                  loggedIn ? setReplyingTo((id) => (id === c.id ? null : c.id)) : goLogin()
+                }
               >
                 Responder
               </button>
@@ -248,30 +221,42 @@ export default function PlayerComments({ playerId, playerName }: PlayerCommentsP
         {total} {total === 1 ? 'comentário' : 'comentários'}
       </h3>
 
-      {COMMENTS_ENABLED && (
-        <div className="yt-composer">
-          <Avatar name="" />
-          <div className="yt-composer__main">
-            {composingTop ? (
-              <Composer
-                playerName={playerName}
-                submitLabel="Comentar"
-                autoFocus
-                onSubmit={addTop}
-                onCancel={() => setComposingTop(false)}
-              />
-            ) : (
-              <button
-                type="button"
-                className="yt-composer__fake"
-                onClick={() => setComposingTop(true)}
-              >
-                Adicionar um comentário…
-              </button>
-            )}
+      {COMMENTS_ENABLED &&
+        (loggedIn ? (
+          <div className="yt-composer">
+            <UserAvatar name={profile?.displayName ?? ''} avatarUrl={profile?.avatarUrl} />
+            <div className="yt-composer__main">
+              {composingTop ? (
+                <Composer
+                  playerName={playerName}
+                  submitLabel="Comentar"
+                  autoFocus
+                  onSubmit={addTop}
+                  onCancel={() => setComposingTop(false)}
+                />
+              ) : (
+                <button
+                  type="button"
+                  className="yt-composer__fake"
+                  onClick={() => setComposingTop(true)}
+                >
+                  Adicionar um comentário…
+                </button>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        ) : (
+          <div className="yt-login-cta">
+            <p>Entre na sua conta para comentar e curtir.</p>
+            <Link
+              to="/entrar"
+              state={{ from: location.pathname }}
+              className="yt-btn yt-btn--primary"
+            >
+              Entrar para comentar
+            </Link>
+          </div>
+        ))}
 
       {loading ? (
         <p className="yt-empty">Carregando…</p>
@@ -288,13 +273,13 @@ export default function PlayerComments({ playerId, playerName }: PlayerCommentsP
               {replyingTo === comment.id && (
                 <div className="yt-replies yt-replies--composer">
                   <div className="yt-composer">
-                    <Avatar name="" />
+                    <UserAvatar name={profile?.displayName ?? ''} avatarUrl={profile?.avatarUrl} />
                     <div className="yt-composer__main">
                       <Composer
                         playerName={playerName}
                         submitLabel="Responder"
                         autoFocus
-                        onSubmit={(a, b) => addReply(comment.id, a, b)}
+                        onSubmit={(b) => addReply(comment.id, b)}
                         onCancel={() => setReplyingTo(null)}
                       />
                     </div>

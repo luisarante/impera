@@ -184,6 +184,37 @@ button:disabled,
   transform: scaleX(1);
 }
 
+/* Entrada de conta (avatar + nome, ou "Entrar") — item final dos links */
+.home-nav__account {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.85rem;
+  color: var(--text-70);
+  font-family: var(--font-body);
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  transition: color 0.25s ease;
+  white-space: nowrap;
+}
+.home-nav__account:hover {
+  color: var(--color-paper);
+}
+.home-nav__account--in {
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-card);
+}
+.home-nav__account--in:hover {
+  border-color: var(--color-accent);
+}
+.home-nav__account-name {
+  max-width: 9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* Botão hambúrguer (só no mobile) */
 .home-nav__toggle {
   display: none;
@@ -1047,6 +1078,16 @@ button:disabled,
   height: 40px;
   font-size: 1rem;
 }
+.yt-avatar--xs {
+  width: 30px;
+  height: 30px;
+  font-size: 0.8rem;
+}
+.yt-avatar--md {
+  width: 56px;
+  height: 56px;
+  font-size: 1.4rem;
+}
 
 /* Composer */
 .yt-composer {
@@ -1109,6 +1150,29 @@ button:disabled,
   margin-right: auto;
   color: var(--color-alert);
   font-size: 0.8rem;
+}
+/* CTA de login (quando o visitante não está logado) */
+.yt-login-cta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+  margin-bottom: 2rem;
+  padding: 1rem 1.15rem;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-card);
+  background: rgba(255, 255, 255, 0.02);
+}
+.yt-login-cta p {
+  margin: 0;
+  flex: 1;
+  min-width: 12rem;
+  color: var(--text-70);
+  font-size: 0.9rem;
+}
+.yt-login-cta .yt-btn {
+  display: inline-block;
+  text-decoration: none;
 }
 .yt-btn {
   border-radius: 999px;

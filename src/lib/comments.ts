@@ -3,20 +3,23 @@
  *
  * Tabelas Supabase:
  *  - `player_comments` (com `parent_id` para respostas — thread de 1 nível)
- *  - `comment_likes`   (uma linha por visitante/comentário)
+ *  - `comment_likes`   (uma linha por usuário/comentário)
  *
- * A torcida é anônima: cada navegador recebe um `visitor_id` (localStorage) que
- * serve para deduplicar curtidas e permitir descurtir. Leitura e escrita são
- * abertas ao público; só o admin apaga comentários (ver migrações 004/005).
+ * Só quem tem conta e está logado comenta, responde e curte. O autor vem do
+ * perfil (`profiles`, `user_id = auth.uid()`) e o avatar da foto do jogador
+ * vinculado. Leitura é pública; apagar é do autor ou do admin (ver migração 016).
  */
-import { supabase } from './supabase'
-import { getVisitorId } from './visitor'
+import { supabase, publicImageUrl } from './supabase'
+
+/** Colunas + perfil do autor (nome e foto do jogador vinculado) embutidos. */
+const SELECT_WITH_AUTHOR = '*, profiles(display_name, players(photo_path))'
 
 export interface PlayerComment {
   id: string
   playerId: string
   parentId: string | null
-  author: string
+  author: string // nome de exibição do autor
+  avatarUrl: string | null // foto do jogador vinculado; null = avatar padrão
   body: string
   createdAt: string // ISO 8601
   likeCount: number
@@ -31,7 +34,6 @@ export interface CommentThread {
 
 export interface NewComment {
   playerId: string
-  author: string
   body: string
   parentId?: string | null
 }
@@ -39,16 +41,23 @@ export interface NewComment {
 /** Comentários habilitados (banco no ar). */
 export const COMMENTS_ENABLED = true
 
+type AuthorEmbed = {
+  display_name: string
+  players: { photo_path: string | null } | null
+} | null
+
 function toComment(
   row: Record<string, unknown>,
   likeCount: number,
   likedByMe: boolean,
 ): PlayerComment {
+  const prof = row.profiles as AuthorEmbed
   return {
     id: row.id as string,
     playerId: row.player_id as string,
     parentId: (row.parent_id as string | null) ?? null,
-    author: row.author as string,
+    author: prof?.display_name ?? 'Torcedor',
+    avatarUrl: publicImageUrl('players', prof?.players?.photo_path ?? null),
     body: row.body as string,
     createdAt: row.created_at as string,
     likeCount,
@@ -56,14 +65,20 @@ function toComment(
   }
 }
 
+/** Id do usuário logado (ou null). Lê da sessão local, sem ida ao servidor. */
+async function currentUserId(): Promise<string | null> {
+  const { data } = await supabase.auth.getSession()
+  return data.session?.user.id ?? null
+}
+
 /**
  * Busca todos os comentários de um jogador já organizados em threads
- * (topo + respostas), com contagem de curtidas e se este visitante curtiu.
+ * (topo + respostas), com contagem de curtidas e se este usuário curtiu.
  */
 export async function fetchThreads(playerId: string): Promise<CommentThread[]> {
   const { data: rows, error } = await supabase
     .from('player_comments')
-    .select('*')
+    .select(SELECT_WITH_AUTHOR)
     .eq('player_id', playerId)
   if (error) throw new Error('Falha ao carregar comentários.')
 
@@ -76,13 +91,13 @@ export async function fetchThreads(playerId: string): Promise<CommentThread[]> {
   if (ids.length) {
     const { data: likes } = await supabase
       .from('comment_likes')
-      .select('comment_id, visitor_id')
+      .select('comment_id, user_id')
       .in('comment_id', ids)
-    const visitor = getVisitorId()
+    const me = await currentUserId()
     for (const l of likes ?? []) {
       const cid = l.comment_id as string
       likeCount.set(cid, (likeCount.get(cid) ?? 0) + 1)
-      if (l.visitor_id === visitor) liked.add(cid)
+      if (me && l.user_id === me) liked.add(cid)
     }
   }
 
@@ -111,41 +126,37 @@ export async function fetchThreads(playerId: string): Promise<CommentThread[]> {
     }))
 }
 
-/** Publica um comentário de topo ou uma resposta (quando `parentId` é dado). */
+/**
+ * Publica um comentário de topo ou uma resposta (quando `parentId` é dado).
+ * O autor (`user_id`) entra pelo default `auth.uid()`; o RLS exige login.
+ */
 export async function postComment(input: NewComment): Promise<PlayerComment> {
-  const author = input.author.trim().slice(0, 40)
   const body = input.body.trim().slice(0, 500)
-  if (!author || !body) throw new Error('Preencha nome e comentário.')
+  if (!body) throw new Error('Escreva um comentário.')
 
   const { data, error } = await supabase
     .from('player_comments')
     .insert({
       player_id: input.playerId,
       parent_id: input.parentId ?? null,
-      author,
       body,
     })
-    .select()
+    .select(SELECT_WITH_AUTHOR)
     .single()
-  if (error) throw new Error('Falha ao publicar o comentário.')
+  if (error) throw new Error('Falha ao publicar o comentário. Você está logado?')
   return toComment(data as Record<string, unknown>, 0, false)
 }
 
-/** Curte (`like=true`) ou descurte (`like=false`) um comentário. */
+/** Curte (`like=true`) ou descurte (`like=false`) um comentário (usuário logado). */
 export async function toggleLike(commentId: string, like: boolean): Promise<void> {
-  const visitor = getVisitorId()
   if (like) {
-    const { error } = await supabase
-      .from('comment_likes')
-      .insert({ comment_id: commentId, visitor_id: visitor })
+    // user_id entra pelo default auth.uid(); o RLS confere o dono.
+    const { error } = await supabase.from('comment_likes').insert({ comment_id: commentId })
     // 23505 = unique_violation (já curtiu): ignora.
     if (error && error.code !== '23505') throw new Error('Falha ao curtir.')
   } else {
-    const { error } = await supabase
-      .from('comment_likes')
-      .delete()
-      .eq('comment_id', commentId)
-      .eq('visitor_id', visitor)
+    // O RLS de delete restringe à própria curtida (user_id = auth.uid()).
+    const { error } = await supabase.from('comment_likes').delete().eq('comment_id', commentId)
     if (error) throw new Error('Falha ao descurtir.')
   }
 }

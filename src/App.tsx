@@ -9,6 +9,9 @@ import NewsPage from './components/news/NewsPage'
 import NewsArticlePage from './components/news/NewsArticlePage'
 import GamesPage from './components/games/GamesPage'
 import StatsPage from './components/stats/StatsPage'
+import LoginPage from './components/account/LoginPage'
+import SignupPage from './components/account/SignupPage'
+import AccountPage from './components/account/AccountPage'
 import { AuthProvider } from './admin/auth'
 import RequireAuth from './admin/RequireAuth'
 
@@ -52,6 +55,11 @@ export default function App() {
           <Route path="/jogos" element={<Public><GamesPage /></Public>} />
           <Route path="/jogos/:id" element={<Public><GamesPage /></Public>} />
           <Route path="/estatisticas" element={<Public><StatsPage /></Public>} />
+
+          {/* Contas da torcida */}
+          <Route path="/entrar" element={<LoginPage />} />
+          <Route path="/cadastro" element={<Public><SignupPage /></Public>} />
+          <Route path="/conta" element={<Public><AccountPage /></Public>} />
 
           {/* Painel admin */}
           <Route path="/admin/login" element={<AdminLogin />} />

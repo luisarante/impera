@@ -1,10 +1,15 @@
 /**
  * Camada de acesso às NOITES DE JOGO (partidas, craque da noite e eventos).
- * Conteúdo é público; o voto de craque é anônimo (1 por visitante/noite,
- * trocável via upsert) usando o mesmo `visitor_id` das curtidas (ver visitor.ts).
+ * Conteúdo é público; votar no craque exige conta e login (1 por usuário/noite,
+ * trocável via upsert), com `user_id = auth.uid()` (ver migração 016).
  */
 import { supabase } from './supabase'
-import { getVisitorId } from './visitor'
+
+/** Id do usuário logado (ou null). Lê da sessão local, sem ida ao servidor. */
+async function currentUserId(): Promise<string | null> {
+  const { data } = await supabase.auth.getSession()
+  return data.session?.user.id ?? null
+}
 
 export type MatchStatus = 'agendada' | 'ao_vivo' | 'encerrada'
 
@@ -122,7 +127,7 @@ export async function fetchNight(id?: string): Promise<NightData | null> {
     supabase.from('matches').select('*').eq('night_id', night.id).order('sort_order'),
     supabase.from('night_events').select('*').eq('night_id', night.id).order('sort_order'),
     supabase.from('mvp_candidates').select('player_id').eq('night_id', night.id).order('sort_order'),
-    supabase.from('mvp_votes').select('player_id, visitor_id').eq('night_id', night.id),
+    supabase.from('mvp_votes').select('player_id, user_id').eq('night_id', night.id),
   ])
 
   const mappedMatches = (matches.data ?? []).map(mapMatch)
@@ -152,11 +157,11 @@ export async function fetchNight(id?: string): Promise<NightData | null> {
 
   const tally: Record<string, number> = {}
   let myVote: string | null = null
-  const visitor = getVisitorId()
+  const me = await currentUserId()
   for (const v of votes.data ?? []) {
     const pid = v.player_id as string
     tally[pid] = (tally[pid] ?? 0) + 1
-    if (v.visitor_id === visitor) myVote = pid
+    if (me && v.user_id === me) myVote = pid
   }
 
   return {
@@ -170,14 +175,15 @@ export async function fetchNight(id?: string): Promise<NightData | null> {
   }
 }
 
-/** Vota (ou troca o voto) no craque da noite. Um voto por visitante/noite. */
+/** Vota (ou troca o voto) no craque da noite. Um voto por usuário/noite (logado). */
 export async function castMvpVote(nightId: string, playerId: string): Promise<void> {
-  const visitor = getVisitorId()
+  const me = await currentUserId()
+  if (!me) throw new Error('Faça login para votar.')
   const { error } = await supabase
     .from('mvp_votes')
     .upsert(
-      { night_id: nightId, player_id: playerId, visitor_id: visitor },
-      { onConflict: 'night_id,visitor_id' },
+      { night_id: nightId, player_id: playerId, user_id: me },
+      { onConflict: 'night_id,user_id' },
     )
   if (error) throw new Error('Falha ao registrar o voto.')
 }
