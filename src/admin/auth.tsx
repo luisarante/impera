@@ -59,18 +59,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let alive = true
+    let currentUserId: string | null = null
+    let initialized = false
 
     async function sync(s: Session | null) {
       if (!alive) return
-      setLoading(true)
       setSession(s)
-      const p = s ? await loadProfile(s.user.id) : null
-      if (!alive) return
-      setProfile(p)
-      setLoading(false)
+      const nextUserId = s?.user.id ?? null
+
+      // Só recarrega o perfil quando o usuário muda de fato. O Supabase reemite
+      // TOKEN_REFRESHED / SIGNED_IN ao voltar de aba (mesma sessão) — reprocessar
+      // isso piscava "Carregando…" e desmontava formulários com dados preenchidos.
+      if (nextUserId !== currentUserId) {
+        currentUserId = nextUserId
+        const p = s ? await loadProfile(s.user.id) : null
+        if (!alive) return
+        setProfile(p)
+      }
+
+      // O spinner global só aparece na primeira resolução da sessão, nunca depois.
+      if (!initialized) {
+        initialized = true
+        setLoading(false)
+      }
     }
 
-    void supabase.auth.getSession().then(({ data }) => sync(data.session))
+    // onAuthStateChange já emite INITIAL_SESSION ao registrar o listener, então
+    // resolve o loading inicial sem precisar de um getSession() separado.
     const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
       void sync(s)
     })
