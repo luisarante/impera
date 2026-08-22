@@ -16,6 +16,12 @@
 -- ---------------------------------------------------------------------------
 -- 0. Limpeza (permite reexecucao)
 -- ---------------------------------------------------------------------------
+drop table if exists public.community_poll_votes   cascade;
+drop table if exists public.community_poll_options  cascade;
+drop table if exists public.community_reply_likes   cascade;
+drop table if exists public.community_topic_likes   cascade;
+drop table if exists public.community_replies       cascade;
+drop table if exists public.community_topics        cascade;
 drop table if exists public.mvp_votes      cascade;
 drop table if exists public.mvp_candidates cascade;
 drop table if exists public.match_goals    cascade;
@@ -595,3 +601,127 @@ begin
     end if;
   end loop;
 end $$;
+
+-- ===========================================================================
+-- 9. COMUNIDADE — fórum de tópicos, respostas, curtidas e enquetes (ver migração 017)
+-- ===========================================================================
+create table public.community_topics (
+  id         uuid primary key default gen_random_uuid(),
+  user_id    uuid not null default auth.uid() references public.profiles(id) on delete cascade,
+  title      text not null check (char_length(title) between 3 and 140),
+  body       text not null check (char_length(body) between 1 and 4000),
+  has_poll   boolean not null default false,
+  pinned     boolean not null default false,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index community_topics_created_idx on public.community_topics (created_at desc);
+create index community_topics_user_idx on public.community_topics (user_id);
+
+create table public.community_replies (
+  id         uuid primary key default gen_random_uuid(),
+  topic_id   uuid not null references public.community_topics(id) on delete cascade,
+  user_id    uuid not null default auth.uid() references public.profiles(id) on delete cascade,
+  parent_id  uuid references public.community_replies(id) on delete cascade,
+  body       text not null check (char_length(body) between 1 and 1000),
+  created_at timestamptz not null default now()
+);
+create index community_replies_topic_idx on public.community_replies (topic_id, created_at);
+create index community_replies_parent_idx on public.community_replies (parent_id, created_at);
+create index community_replies_user_idx on public.community_replies (user_id);
+
+create table public.community_topic_likes (
+  id         uuid primary key default gen_random_uuid(),
+  topic_id   uuid not null references public.community_topics(id) on delete cascade,
+  user_id    uuid not null default auth.uid() references public.profiles(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  unique (topic_id, user_id)
+);
+create index community_topic_likes_topic_idx on public.community_topic_likes (topic_id);
+
+create table public.community_reply_likes (
+  id         uuid primary key default gen_random_uuid(),
+  reply_id   uuid not null references public.community_replies(id) on delete cascade,
+  user_id    uuid not null default auth.uid() references public.profiles(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  unique (reply_id, user_id)
+);
+create index community_reply_likes_reply_idx on public.community_reply_likes (reply_id);
+
+create table public.community_poll_options (
+  id         uuid primary key default gen_random_uuid(),
+  topic_id   uuid not null references public.community_topics(id) on delete cascade,
+  label      text not null check (char_length(label) between 1 and 120),
+  sort_order int not null default 0,
+  created_at timestamptz not null default now()
+);
+create index community_poll_options_topic_idx on public.community_poll_options (topic_id, sort_order);
+
+create table public.community_poll_votes (
+  id         uuid primary key default gen_random_uuid(),
+  topic_id   uuid not null references public.community_topics(id) on delete cascade,
+  option_id  uuid not null references public.community_poll_options(id) on delete cascade,
+  user_id    uuid not null default auth.uid() references public.profiles(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  unique (topic_id, user_id)
+);
+create index community_poll_votes_option_idx on public.community_poll_votes (option_id);
+
+-- RLS: leitura pública; escrita exige login; dono ou admin modera.
+alter table public.community_topics enable row level security;
+create policy "community_topics_read_all" on public.community_topics for select using (true);
+create policy "community_topics_insert_auth" on public.community_topics
+  for insert to authenticated with check (user_id = auth.uid());
+create policy "community_topics_update_own_or_admin" on public.community_topics
+  for update to authenticated
+  using (user_id = auth.uid() or public.is_admin())
+  with check (user_id = auth.uid() or public.is_admin());
+create policy "community_topics_delete_own_or_admin" on public.community_topics
+  for delete to authenticated using (user_id = auth.uid() or public.is_admin());
+
+alter table public.community_replies enable row level security;
+create policy "community_replies_read_all" on public.community_replies for select using (true);
+create policy "community_replies_insert_auth" on public.community_replies
+  for insert to authenticated with check (user_id = auth.uid());
+create policy "community_replies_delete_own_or_admin" on public.community_replies
+  for delete to authenticated using (user_id = auth.uid() or public.is_admin());
+
+alter table public.community_topic_likes enable row level security;
+create policy "community_topic_likes_read_all" on public.community_topic_likes for select using (true);
+create policy "community_topic_likes_insert_own" on public.community_topic_likes
+  for insert to authenticated with check (user_id = auth.uid());
+create policy "community_topic_likes_delete_own" on public.community_topic_likes
+  for delete to authenticated using (user_id = auth.uid());
+
+alter table public.community_reply_likes enable row level security;
+create policy "community_reply_likes_read_all" on public.community_reply_likes for select using (true);
+create policy "community_reply_likes_insert_own" on public.community_reply_likes
+  for insert to authenticated with check (user_id = auth.uid());
+create policy "community_reply_likes_delete_own" on public.community_reply_likes
+  for delete to authenticated using (user_id = auth.uid());
+
+-- Opções de enquete: leitura pública; gerir (inserir/editar/apagar) é do dono
+-- do tópico ou admin — a enquete pode ser criada ou ajustada depois.
+alter table public.community_poll_options enable row level security;
+create policy "community_poll_options_read_all" on public.community_poll_options for select using (true);
+create policy "community_poll_options_insert_owner_or_admin" on public.community_poll_options
+  for insert to authenticated with check (
+    exists (select 1 from public.community_topics t where t.id = topic_id and (t.user_id = auth.uid() or public.is_admin()))
+  );
+create policy "community_poll_options_update_owner_or_admin" on public.community_poll_options
+  for update to authenticated
+  using (exists (select 1 from public.community_topics t where t.id = topic_id and (t.user_id = auth.uid() or public.is_admin())))
+  with check (exists (select 1 from public.community_topics t where t.id = topic_id and (t.user_id = auth.uid() or public.is_admin())));
+create policy "community_poll_options_delete_owner_or_admin" on public.community_poll_options
+  for delete to authenticated using (
+    exists (select 1 from public.community_topics t where t.id = topic_id and (t.user_id = auth.uid() or public.is_admin()))
+  );
+
+alter table public.community_poll_votes enable row level security;
+create policy "community_poll_votes_read_all" on public.community_poll_votes for select using (true);
+create policy "community_poll_votes_insert_own" on public.community_poll_votes
+  for insert to authenticated with check (user_id = auth.uid());
+create policy "community_poll_votes_update_own" on public.community_poll_votes
+  for update to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
+create policy "community_poll_votes_delete_own" on public.community_poll_votes
+  for delete to authenticated using (user_id = auth.uid());

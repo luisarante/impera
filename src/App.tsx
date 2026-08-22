@@ -9,6 +9,9 @@ import NewsPage from './components/news/NewsPage'
 import NewsArticlePage from './components/news/NewsArticlePage'
 import GamesPage from './components/games/GamesPage'
 import StatsPage from './components/stats/StatsPage'
+import CommunityPage from './components/community/CommunityPage'
+import CommunityTopicPage from './components/community/CommunityTopicPage'
+import NewTopicPage from './components/community/NewTopicPage'
 import LoginPage from './components/account/LoginPage'
 import SignupPage from './components/account/SignupPage'
 import AccountPage from './components/account/AccountPage'
@@ -28,6 +31,7 @@ const AdminMilestones = lazy(() => import('./admin/AdminMilestones'))
 const AdminBigNumbers = lazy(() => import('./admin/AdminBigNumbers'))
 const AdminClub = lazy(() => import('./admin/AdminClub'))
 const AdminGames = lazy(() => import('./admin/AdminGames'))
+const AdminCommunity = lazy(() => import('./admin/AdminCommunity'))
 
 /** Páginas públicas: gate que aguarda o conteúdo do banco. */
 function Public({ children }: { children: ReactNode }) {
@@ -55,6 +59,9 @@ export default function App() {
           <Route path="/jogos" element={<Public><GamesPage /></Public>} />
           <Route path="/jogos/:id" element={<Public><GamesPage /></Public>} />
           <Route path="/estatisticas" element={<Public><StatsPage /></Public>} />
+          <Route path="/comunidade" element={<Public><CommunityPage /></Public>} />
+          <Route path="/comunidade/novo" element={<Public><NewTopicPage /></Public>} />
+          <Route path="/comunidade/:id" element={<Public><CommunityTopicPage /></Public>} />
 
           {/* Contas da torcida */}
           <Route path="/entrar" element={<LoginPage />} />
@@ -76,6 +83,7 @@ export default function App() {
             <Route path="jogos" element={<AdminGames />} />
             <Route path="galeria" element={<AdminGallery />} />
             <Route path="noticias" element={<AdminNews />} />
+            <Route path="comunidade" element={<AdminCommunity />} />
             <Route path="kits" element={<AdminKits />} />
             <Route path="marcos" element={<AdminMilestones />} />
             <Route path="numeros" element={<AdminBigNumbers />} />

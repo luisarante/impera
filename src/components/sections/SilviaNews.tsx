@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom'
 import { useClubData } from '../../lib/data/ClubDataContext'
 import VerifiedBadge from '../ui/VerifiedBadge'
 import GhostButton from '../ui/GhostButton'
+import CommunityTeaser from './CommunityTeaser'
 
 function formatDate(iso: string): string {
   if (!iso) return ''
@@ -87,6 +88,9 @@ export default function SilviaNews() {
               {n.verified && <VerifiedBadge />}
             </article>
           ))}
+          <div className="pt-7">
+            <CommunityTeaser />
+          </div>
         </div>
       </div>
 

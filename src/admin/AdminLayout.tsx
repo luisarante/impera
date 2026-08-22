@@ -10,6 +10,7 @@ const NAV = [
   { to: '/admin/jogos', label: 'Noites de jogo' },
   { to: '/admin/galeria', label: 'Galeria' },
   { to: '/admin/noticias', label: 'Notícias' },
+  { to: '/admin/comunidade', label: 'Comunidade' },
   { to: '/admin/kits', label: 'Kits' },
   { to: '/admin/marcos', label: 'Marcos' },
   { to: '/admin/numeros', label: 'Números' },
