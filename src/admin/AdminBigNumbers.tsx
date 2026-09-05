@@ -12,6 +12,7 @@ interface BigNumberRow {
   label: string
   highlight: 'gold' | 'paper' | null
   sort_order: number
+  ea_field: string | null // preenchido = valor atualizado sozinho pela sincronização EA
 }
 
 const blank = (sort_order: number): Partial<BigNumberRow> => ({
@@ -22,6 +23,7 @@ const blank = (sort_order: number): Partial<BigNumberRow> => ({
   label: '',
   highlight: null,
   sort_order,
+  ea_field: null,
 })
 
 export default function AdminBigNumbers() {
@@ -68,15 +70,33 @@ export default function AdminBigNumbers() {
       <div className="max-w-2xl">
         <PageHeader title={draft.id ? 'Editar número' : 'Novo número'} />
         <div className="space-y-5">
+          {draft.ea_field && (
+            <p className="rounded-md border border-[var(--color-accent)] px-3 py-2 text-xs text-[var(--text-70)]">
+              Este valor é atualizado automaticamente pela sincronização da EA (campo{' '}
+              <code>{draft.ea_field}</code>) — os campos abaixo ficam bloqueados.{' '}
+              <button
+                type="button"
+                className="underline"
+                onClick={() => set('ea_field', null)}
+              >
+                Desvincular e editar na mão
+              </button>
+            </p>
+          )}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="Valor exibido (ex.: 500)">
-              <TextInput value={draft.value ?? ''} onChange={(e) => set('value', e.target.value)} />
+              <TextInput
+                value={draft.value ?? ''}
+                onChange={(e) => set('value', e.target.value)}
+                disabled={!!draft.ea_field}
+              />
             </Field>
             <Field label="Valor animado (opcional, número)">
               <TextInput
                 type="number"
                 value={draft.numeric_value ?? ''}
                 onChange={(e) => set('numeric_value', e.target.value ? Number(e.target.value) : null)}
+                disabled={!!draft.ea_field}
               />
             </Field>
           </div>
@@ -135,6 +155,11 @@ export default function AdminBigNumbers() {
             </span>
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm text-[var(--text-50)]">{b.label}</p>
+              {b.ea_field && (
+                <p className="text-[0.65rem] uppercase tracking-[0.1em] text-[var(--color-accent)]">
+                  Sincronizado da EA
+                </p>
+              )}
             </div>
             <Button onClick={() => setDraft(b)}>Editar</Button>
             <Button variant="danger" onClick={() => del(b)}>

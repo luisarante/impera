@@ -214,6 +214,23 @@ async function syncClubSummary(db, clubId) {
       { onConflict: 'club_id' },
     )
     if (error) throw new Error(`ea_club_stats: ${error.message}`)
+
+    // Números da home (big_numbers) marcados com ea_field — ver migração 020.
+    const fieldValue = {
+      goals: Number(overall.goals ?? 0),
+      games_played: Number(overall.gamesPlayed ?? 0),
+      wins: Number(overall.wins ?? 0),
+      promotions: Number(overall.promotions ?? 0),
+      titles: Object.values(divisionFinishes).reduce((sum, n) => sum + n, 0),
+      best_division: overall.bestDivision != null ? Number(overall.bestDivision) : null,
+      skill_rating: overall.skillRating != null ? Number(overall.skillRating) : null,
+    }
+    const { data: bigNumberRows } = await db.from('big_numbers').select('id, ea_field').not('ea_field', 'is', null)
+    for (const row of bigNumberRows ?? []) {
+      const val = fieldValue[row.ea_field]
+      if (val == null) continue
+      await db.from('big_numbers').update({ value: String(val), numeric_value: val }).eq('id', row.id)
+    }
   }
 
   const members = await fetchEaMemberCareerStats()
