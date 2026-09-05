@@ -37,6 +37,14 @@ export interface Goal {
   team: 'nos' | 'adv' // autor do lance: nosso time ou o adversário
 }
 
+/** Estatística agregada de um jogador numa partida sincronizada da EA. */
+export interface PlayerMatchStats {
+  eaPlayerId: string
+  playerId: string | null // resolvido via ea_player_map; null = persona ainda não vinculada
+  goals: number
+  assists: number
+}
+
 export interface Match {
   id: string
   opponent: string
@@ -44,7 +52,50 @@ export interface Match {
   oppScore: number | null
   competition: string | null
   status: MatchStatus
-  goals: Goal[] // gols do Imperatrice (só elenco), em ordem de minuto
+  eaMatchId: string | null // presente = sincronizada automaticamente da EA
+  goals: Goal[] // gols do Imperatrice lançados manualmente (partidas sem EA), com minuto
+  stats: PlayerMatchStats[] // stats agregadas da EA (partidas sincronizadas); vazio se manual
+}
+
+/** Goleadores/garçons de uma partida, tirando da EA (stats) ou do manual (goals). */
+export interface MatchTally {
+  scorers: { playerId: string; goals: number; minutes: (number | null)[] }[]
+  assisters: { playerId: string; assists: number }[]
+}
+
+/**
+ * Resume quem marcou/deu assistência numa partida, com fallback por partida:
+ * se ela foi sincronizada da EA (tem `stats`), usa as contagens agregadas
+ * (sem minuto, já que a EA não expõe gol-a-gol); senão usa os `goals`
+ * lançados manualmente, com minuto por gol.
+ */
+export function matchTally(m: Pick<Match, 'goals' | 'stats'>): MatchTally {
+  if (m.stats.length) {
+    const scorers = m.stats
+      .filter((s) => s.playerId && s.goals > 0)
+      .map((s) => ({ playerId: s.playerId as string, goals: s.goals, minutes: [] as (number | null)[] }))
+    const assisters = m.stats
+      .filter((s) => s.playerId && s.assists > 0)
+      .map((s) => ({ playerId: s.playerId as string, assists: s.assists }))
+    return { scorers, assisters }
+  }
+
+  const scorerMap = new Map<string, { goals: number; minutes: (number | null)[] }>()
+  const assistMap = new Map<string, number>()
+  for (const g of m.goals) {
+    if (g.team !== 'nos') continue
+    if (g.playerId) {
+      const cur = scorerMap.get(g.playerId) ?? { goals: 0, minutes: [] }
+      cur.goals += 1
+      cur.minutes.push(g.minute)
+      scorerMap.set(g.playerId, cur)
+    }
+    if (g.assistId) assistMap.set(g.assistId, (assistMap.get(g.assistId) ?? 0) + 1)
+  }
+  return {
+    scorers: [...scorerMap.entries()].map(([playerId, v]) => ({ playerId, goals: v.goals, minutes: v.minutes })),
+    assisters: [...assistMap.entries()].map(([playerId, assists]) => ({ playerId, assists })),
+  }
 }
 
 export interface NightEvent {
@@ -84,7 +135,9 @@ function mapMatch(row: Record<string, unknown>): Match {
     oppScore: (row.opp_score as number) ?? null,
     competition: (row.competition as string) ?? null,
     status: (row.status as MatchStatus) ?? 'encerrada',
+    eaMatchId: (row.ea_match_id as string) ?? null,
     goals: [],
+    stats: [],
   }
 }
 
@@ -153,6 +206,32 @@ export async function fetchNight(id?: string): Promise<NightData | null> {
       })
     }
     for (const m of mappedMatches) m.goals = byMatch.get(m.id) ?? []
+
+    // Stats agregadas das partidas sincronizadas da EA (goals/assists por jogador).
+    const { data: statsRows } = await supabase
+      .from('match_player_stats')
+      .select('match_id, ea_player_id, goals, assists')
+      .in('match_id', matchIds)
+    if (statsRows?.length) {
+      const eaPlayerIds = [...new Set(statsRows.map((r) => r.ea_player_id as string))]
+      const { data: mapRows } = await supabase
+        .from('ea_player_map')
+        .select('ea_player_id, player_id')
+        .in('ea_player_id', eaPlayerIds)
+      const playerIdOf = new Map((mapRows ?? []).map((r) => [r.ea_player_id as string, (r.player_id as string) ?? null]))
+      const statsByMatch = new Map<string, PlayerMatchStats[]>()
+      for (const r of statsRows) {
+        const mid = r.match_id as string
+        if (!statsByMatch.has(mid)) statsByMatch.set(mid, [])
+        statsByMatch.get(mid)!.push({
+          eaPlayerId: r.ea_player_id as string,
+          playerId: playerIdOf.get(r.ea_player_id as string) ?? null,
+          goals: (r.goals as number) ?? 0,
+          assists: (r.assists as number) ?? 0,
+        })
+      }
+      for (const m of mappedMatches) m.stats = statsByMatch.get(m.id) ?? []
+    }
   }
 
   const tally: Record<string, number> = {}

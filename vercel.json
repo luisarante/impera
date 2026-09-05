@@ -2,8 +2,13 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "functions": {
     "api/ai-game-summary.js": { "maxDuration": 30, "includeFiles": "api/assets/**" },
-    "api/ai-news-draft.js": { "maxDuration": 30 }
+    "api/ai-news-draft.js": { "maxDuration": 30 },
+    "api/ea-sync.js": { "maxDuration": 30 },
+    "api/ea-sync-manual.js": { "maxDuration": 30 }
   },
+  "crons": [
+    { "path": "/api/ea-sync", "schedule": "0 * * * *" }
+  ],
   "rewrites": [
     { "source": "/noticias/:id", "destination": "/api/news-og?id=:id" },
     { "source": "/(.*)", "destination": "/index.html" }

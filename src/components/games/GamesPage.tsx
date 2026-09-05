@@ -11,6 +11,7 @@ import {
   castMvpVote,
   fetchNight,
   fetchNights,
+  matchTally,
   type GameNight,
   type Match,
   type NightData,
@@ -44,11 +45,9 @@ function buildNightSummary(matches: Match[], squad: Player[]): NightSummary {
   const assistCount = new Map<string, number>()
 
   for (const m of matches) {
-    for (const g of m.goals) {
-      if (g.team !== 'nos') continue
-      if (g.playerId) scorerCount.set(g.playerId, (scorerCount.get(g.playerId) ?? 0) + 1)
-      if (g.assistId) assistCount.set(g.assistId, (assistCount.get(g.assistId) ?? 0) + 1)
-    }
+    const tally = matchTally(m)
+    for (const s of tally.scorers) scorerCount.set(s.playerId, (scorerCount.get(s.playerId) ?? 0) + s.goals)
+    for (const a of tally.assisters) assistCount.set(a.playerId, (assistCount.get(a.playerId) ?? 0) + a.assists)
 
     if (m.ourScore == null || m.oppScore == null) continue
     matchesPlayed += 1
@@ -702,16 +701,11 @@ export default function GamesPage() {
               ) : (
                 <div className="mt-4 space-y-4">
                   {data.matches.map((m) => {
-                    // Agrupa os gols por jogador preservando os minutos.
-                    const byPlayer = new Map<string, (number | null)[]>()
-                    for (const g of m.goals) {
-                      if (g.team !== 'nos' || !g.playerId) continue
-                      if (!byPlayer.has(g.playerId)) byPlayer.set(g.playerId, [])
-                      byPlayer.get(g.playerId)!.push(g.minute)
-                    }
-                    const scorerLines = [...byPlayer.entries()].map(([pid, mins]) => {
+                    // Goleadores da partida (EA sincronizada = contagem; manual = com minuto).
+                    const scorerLines = matchTally(m).scorers.map(({ playerId: pid, goals, minutes }) => {
                       const name = squad.find((p) => p.id === pid)?.name ?? '—'
-                      const minsTxt = mins.filter((x) => x != null).map((x) => `${x}'`).join(', ')
+                      const mins = minutes.filter((x) => x != null)
+                      const minsTxt = mins.length ? mins.map((x) => `${x}'`).join(', ') : goals > 1 ? `(${goals})` : ''
                       return { pid, name, minsTxt }
                     })
                     const decided = m.ourScore != null && m.oppScore != null

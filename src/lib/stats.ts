@@ -123,19 +123,45 @@ export async function fetchSeasonStats(seasonStart: string | null): Promise<Seas
     }
   }
 
-  // Garçons da temporada: assistências nos gols NOSSOS das partidas do recorte.
+  // Garçons da temporada: assistências das partidas do recorte. Partidas
+  // sincronizadas da EA (têm linhas em match_player_stats) usam a contagem
+  // agregada de lá; as demais (manuais) usam os gols com assist_id.
   const matchIds = matches.map((m) => m.id)
   const assistCount = new Map<string, number>()
   if (matchIds.length) {
-    const { data: assistsData } = await supabase
-      .from('match_goals')
-      .select('assist_id')
+    const { data: statsRows } = await supabase
+      .from('match_player_stats')
+      .select('match_id, ea_player_id, assists')
       .in('match_id', matchIds)
-      .eq('team', 'nos')
-      .not('assist_id', 'is', null)
-    for (const a of assistsData ?? []) {
-      const pid = a.assist_id as string
-      assistCount.set(pid, (assistCount.get(pid) ?? 0) + 1)
+      .gt('assists', 0)
+    const eaMatchIds = new Set((statsRows ?? []).map((r) => r.match_id as string))
+
+    if (statsRows?.length) {
+      const eaPlayerIds = [...new Set(statsRows.map((r) => r.ea_player_id as string))]
+      const { data: mapRows } = await supabase
+        .from('ea_player_map')
+        .select('ea_player_id, player_id')
+        .in('ea_player_id', eaPlayerIds)
+      const playerIdOf = new Map((mapRows ?? []).map((r) => [r.ea_player_id as string, r.player_id as string | null]))
+      for (const r of statsRows) {
+        const pid = playerIdOf.get(r.ea_player_id as string)
+        if (!pid) continue
+        assistCount.set(pid, (assistCount.get(pid) ?? 0) + ((r.assists as number) ?? 0))
+      }
+    }
+
+    const manualMatchIds = matchIds.filter((id) => !eaMatchIds.has(id))
+    if (manualMatchIds.length) {
+      const { data: assistsData } = await supabase
+        .from('match_goals')
+        .select('assist_id')
+        .in('match_id', manualMatchIds)
+        .eq('team', 'nos')
+        .not('assist_id', 'is', null)
+      for (const a of assistsData ?? []) {
+        const pid = a.assist_id as string
+        assistCount.set(pid, (assistCount.get(pid) ?? 0) + 1)
+      }
     }
   }
   const topAssisters = [...assistCount.entries()]

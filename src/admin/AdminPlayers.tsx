@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type { PositionCode } from '../data/club'
 import { publicImageUrl, removeImage } from '../lib/supabase'
 import { useTable } from './useTable'
 import { Button, Card, Field, ImageUpload, PageHeader, Select, TextArea, TextInput } from './ui'
 import { useConfirm, useToast } from './feedback'
+import { fetchEaPlayerMap, setEaPlayerMapping, type EaPlayerMapRow } from '../lib/ea'
 
 interface PlayerRow {
   id: string
@@ -176,6 +177,8 @@ export default function AdminPlayers() {
       {loading && <p className="text-[var(--text-50)]">Carregando…</p>}
       {error && <p className="text-[var(--color-alert)]">{error}</p>}
 
+      <EaPlayerLinks players={rows} />
+
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         {rows.map((p) => (
           <Card key={p.id} className="flex items-center gap-4">
@@ -210,5 +213,81 @@ export default function AdminPlayers() {
         ))}
       </div>
     </div>
+  )
+}
+
+/**
+ * Vínculos EA: liga cada persona vista nas partidas sincronizadas da EA a um
+ * jogador do elenco. Sem vínculo, as stats daquela persona ficam registradas
+ * mas não entram nas estatísticas do jogador — vincular aqui resolve todo o
+ * histórico já sincronizado, sem reprocessar nada.
+ */
+function EaPlayerLinks({ players }: { players: { id: string; name: string; number: string }[] }) {
+  const toast = useToast()
+  const [rows, setRows] = useState<EaPlayerMapRow[]>([])
+  const [loading, setLoading] = useState(true)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    try {
+      setRows(await fetchEaPlayerMap())
+    } catch {
+      // painel opcional — falha silenciosa não deve travar o resto do admin
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    load()
+  }, [load])
+
+  async function link(eaPlayerId: string, playerId: string) {
+    try {
+      await setEaPlayerMapping(eaPlayerId, playerId || null)
+      await load()
+      toast('Vínculo salvo.', 'success')
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Falha ao salvar o vínculo.', 'error')
+    }
+  }
+
+  if (loading || rows.length === 0) return null
+
+  const unmapped = rows.filter((r) => !r.playerId)
+  const mapped = rows.filter((r) => r.playerId)
+
+  return (
+    <Card className="mb-6 space-y-3">
+      <div>
+        <h3 className="text-sm uppercase tracking-[0.14em] text-[var(--color-accent)]">Vínculos EA</h3>
+        <p className="mt-1 text-xs text-[var(--text-50)]">
+          Personas vistas nas partidas sincronizadas da EA. Vincule cada uma a um jogador do elenco
+          para que as estatísticas dela entrem nos números do jogador.
+        </p>
+      </div>
+      <div className="space-y-2">
+        {[...unmapped, ...mapped].map((r) => (
+          <div key={r.eaPlayerId} className="flex items-center gap-3 text-sm">
+            <span className="min-w-0 flex-1 truncate">
+              {r.personaName}
+              {!r.playerId && <span className="ml-2 text-[var(--color-alert)]">não vinculada</span>}
+            </span>
+            <Select
+              className="min-w-[180px]"
+              value={r.playerId ?? ''}
+              onChange={(e) => link(r.eaPlayerId, e.target.value)}
+            >
+              <option value="">Sem vínculo</option>
+              {players.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name} {p.number}
+                </option>
+              ))}
+            </Select>
+          </div>
+        ))}
+      </div>
+    </Card>
   )
 }

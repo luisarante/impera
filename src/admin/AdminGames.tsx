@@ -11,6 +11,7 @@ import {
 import { Button, Card, Field, PageHeader, Select, TextArea, TextInput } from './ui'
 import { useConfirm, useToast } from './feedback'
 import { requestNightSummary } from '../lib/ai'
+import { syncEaNow } from '../lib/ea'
 
 interface NightRow {
   id: string
@@ -30,6 +31,16 @@ interface MatchRow {
   competition: string | null
   status: 'agendada' | 'ao_vivo' | 'encerrada'
   sort_order: number
+  ea_match_id: string | null
+}
+interface MatchStatRow {
+  ea_player_id: string
+  ea_persona_name: string
+  player_id: string | null
+  goals: number
+  assists: number
+  rating: number | null
+  is_motm: boolean
 }
 interface EventRow {
   id: string
@@ -63,6 +74,7 @@ export default function AdminGames() {
   const [loading, setLoading] = useState(true)
   const [draft, setDraft] = useState<Partial<NightRow> | null>(null)
   const [selected, setSelected] = useState<NightRow | null>(null)
+  const [syncing, setSyncing] = useState(false)
 
   const loadNights = useCallback(async () => {
     setLoading(true)
@@ -115,6 +127,25 @@ export default function AdminGames() {
     toast('Noite removida.', 'success')
   }
 
+  async function syncNow() {
+    if (syncing) return
+    setSyncing(true)
+    try {
+      const r = await syncEaNow()
+      toast(
+        r.matchesNew > 0
+          ? `${r.matchesNew} partida(s) nova(s) sincronizada(s) da EA.`
+          : 'Nenhuma partida nova — já está tudo em dia.',
+        'success',
+      )
+      await loadNights()
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Falha ao sincronizar com a EA.', 'error')
+    } finally {
+      setSyncing(false)
+    }
+  }
+
   if (selected) {
     return <NightEditor night={selected} onBack={() => setSelected(null)} />
   }
@@ -162,9 +193,14 @@ export default function AdminGames() {
       <PageHeader
         title="Noites de jogo"
         action={
-          <Button variant="primary" onClick={() => setDraft({ title: '', date: todayIso() })}>
-            + Nova noite
-          </Button>
+          <div className="flex gap-2">
+            <Button onClick={syncNow} disabled={syncing}>
+              {syncing ? 'Sincronizando…' : 'Sincronizar agora (EA)'}
+            </Button>
+            <Button variant="primary" onClick={() => setDraft({ title: '', date: todayIso() })}>
+              + Nova noite
+            </Button>
+          </div>
         }
       />
       {loading && <p className="text-[var(--text-50)]">Carregando…</p>}
@@ -222,6 +258,7 @@ function NightEditor({ night, onBack }: { night: NightRow; onBack: () => void })
       { id: string; player_id: string | null; assist_id: string | null; minute: number | null; team: 'nos' | 'adv' }[]
     >
   >({})
+  const [stats, setStats] = useState<Record<string, MatchStatRow[]>>({})
   const [goalSel, setGoalSel] = useState<Record<string, string>>({})
   const [goalAssist, setGoalAssist] = useState<Record<string, string>>({})
   const [goalMin, setGoalMin] = useState<Record<string, string>>({})
@@ -275,6 +312,37 @@ function NightEditor({ night, onBack }: { night: NightRow; onBack: () => void })
       }
     }
     setGoals(map)
+
+    // Stats sincronizadas da EA (só existem para partidas com ea_match_id).
+    const statsMap: Record<string, MatchStatRow[]> = {}
+    if (ids.length) {
+      const { data: statsRows } = await supabase
+        .from('match_player_stats')
+        .select('match_id, ea_player_id, ea_persona_name, goals, assists, rating, is_motm')
+        .in('match_id', ids)
+      const eaPlayerIds = [...new Set((statsRows ?? []).map((r) => r.ea_player_id as string))]
+      let playerIdOf = new Map<string, string | null>()
+      if (eaPlayerIds.length) {
+        const { data: mapRows } = await supabase
+          .from('ea_player_map')
+          .select('ea_player_id, player_id')
+          .in('ea_player_id', eaPlayerIds)
+        playerIdOf = new Map((mapRows ?? []).map((r) => [r.ea_player_id as string, (r.player_id as string) ?? null]))
+      }
+      for (const r of statsRows ?? []) {
+        const mid = r.match_id as string
+        ;(statsMap[mid] ??= []).push({
+          ea_player_id: r.ea_player_id as string,
+          ea_persona_name: r.ea_persona_name as string,
+          player_id: playerIdOf.get(r.ea_player_id as string) ?? null,
+          goals: (r.goals as number) ?? 0,
+          assists: (r.assists as number) ?? 0,
+          rating: (r.rating as number) ?? null,
+          is_motm: (r.is_motm as boolean) ?? false,
+        })
+      }
+    }
+    setStats(statsMap)
   }, [night.id])
 
   useEffect(() => {
@@ -670,7 +738,7 @@ function NightEditor({ night, onBack }: { night: NightRow; onBack: () => void })
                     Nós {m.our_score ?? '–'} × {m.opp_score ?? '–'} {m.opponent}
                     {m.competition ? ` · ${m.competition}` : ''}
                   </span>
-                  <Button onClick={() => setMatchDraft(m)}>Editar</Button>
+                  {!m.ea_match_id && <Button onClick={() => setMatchDraft(m)}>Editar</Button>}
                   <Button
                     variant="danger"
                     onClick={async () => {
@@ -692,9 +760,43 @@ function NightEditor({ night, onBack }: { night: NightRow; onBack: () => void })
                   </Button>
                 </div>
 
-                {/* Gols da partida — botão rápido +Gol (nós/adversário) para o AO VIVO.
-                    Cada +Gol registra o lance E sobe o placar. Gol nosso pode ter
-                    autor + minuto, ou ficar sem autor (o bot marcou). */}
+                {/* Partida sincronizada da EA: placar/gols vêm automáticos — só mostra
+                    um resumo somente-leitura das stats por jogador, sem edição manual. */}
+                {m.ea_match_id ? (
+                  <div className="rounded-md border border-[var(--hairline)] p-3">
+                    <p className="mb-2 text-xs uppercase tracking-[0.12em] text-[var(--text-50)]">
+                      Sincronizado da EA{m.competition ? ` · ${m.competition}` : ''}
+                    </p>
+                    {(stats[m.id] ?? []).length === 0 ? (
+                      <p className="text-xs text-[var(--text-50)]">Sem estatísticas por jogador.</p>
+                    ) : (
+                      <div className="flex flex-wrap gap-2">
+                        {(stats[m.id] ?? [])
+                          .slice()
+                          .sort((a, b) => b.goals - a.goals || b.assists - a.assists)
+                          .map((s) => {
+                            const name = s.player_id
+                              ? players.find((p) => p.id === s.player_id)?.name ?? s.ea_persona_name
+                              : s.ea_persona_name
+                            return (
+                              <span
+                                key={s.ea_player_id}
+                                className="inline-flex items-center gap-1.5 rounded-full border border-[var(--hairline)] px-3 py-1 text-xs"
+                                title={s.player_id ? undefined : 'Persona da EA ainda não vinculada a um jogador (ver Elenco → Vínculos EA)'}
+                              >
+                                {s.is_motm && <span aria-hidden>👑</span>}
+                                {name}
+                                {!s.player_id && <span className="text-[var(--color-alert)]">?</span>}
+                                {s.goals > 0 && <span className="text-[var(--color-accent)]">{s.goals}g</span>}
+                                {s.assists > 0 && <span className="text-[var(--text-50)]">{s.assists}a</span>}
+                                {s.rating != null && <span className="text-[var(--text-50)]">{s.rating.toFixed(1)}</span>}
+                              </span>
+                            )
+                          })}
+                      </div>
+                    )}
+                  </div>
+                ) : (
                 <div className="rounded-md border border-[var(--hairline)] p-3">
                   <p className="mb-2 text-xs uppercase tracking-[0.12em] text-[var(--text-50)]">
                     Gols da partida
@@ -823,6 +925,7 @@ function NightEditor({ night, onBack }: { night: NightRow; onBack: () => void })
                     para ajustar o placar manualmente em “Editar”.
                   </p>
                 </div>
+                )}
               </Card>
             )
           })}

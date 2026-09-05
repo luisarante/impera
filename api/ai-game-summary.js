@@ -58,15 +58,45 @@ async function buildNightFacts(db, nightId) {
   const photoOf = new Map(players.map((p) => [p.id, p.photo_path]))
 
   const matchIds = matches.map((m) => m.id)
+
+  // Gols/goleadores: partidas sincronizadas da EA usam a contagem agregada de
+  // match_player_stats (sem minuto — a EA não expõe gol-a-gol); as demais
+  // (manuais) usam match_goals, com minuto por gol.
   let goals = []
+  const eaMatchIds = new Set()
   if (matchIds.length) {
-    const g = await db
-      .from('match_goals')
-      .select('match_id,player_id,minute,team')
+    const statsRes = await db
+      .from('match_player_stats')
+      .select('match_id, ea_player_id, goals')
       .in('match_id', matchIds)
-      .order('sort_order')
-    // Só os gols NOSSOS com autor entram nos goleadores/atribuições do resumo.
-    goals = (g.data ?? []).filter((x) => x.team === 'nos' && x.player_id)
+      .gt('goals', 0)
+    const statsRows = statsRes.data ?? []
+    if (statsRows.length) {
+      const eaPlayerIds = [...new Set(statsRows.map((r) => r.ea_player_id))]
+      const { data: mapRows } = await db
+        .from('ea_player_map')
+        .select('ea_player_id, player_id')
+        .in('ea_player_id', eaPlayerIds)
+      const playerIdOf = new Map((mapRows ?? []).map((r) => [r.ea_player_id, r.player_id]))
+      for (const r of statsRows) {
+        eaMatchIds.add(r.match_id)
+        const pid = playerIdOf.get(r.ea_player_id)
+        if (!pid) continue
+        for (let i = 0; i < r.goals; i++) {
+          goals.push({ match_id: r.match_id, player_id: pid, minute: null, team: 'nos' })
+        }
+      }
+    }
+
+    const manualMatchIds = matchIds.filter((id) => !eaMatchIds.has(id))
+    if (manualMatchIds.length) {
+      const g = await db
+        .from('match_goals')
+        .select('match_id,player_id,minute,team')
+        .in('match_id', manualMatchIds)
+        .order('sort_order')
+      goals.push(...(g.data ?? []).filter((x) => x.team === 'nos' && x.player_id))
+    }
   }
 
   const goalsByMatch = new Map()
