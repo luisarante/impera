@@ -1,7 +1,7 @@
 /**
- * Camada de acesso aos dados sincronizados da EA Pro Clubs (vínculos de
- * jogador e disparo manual da sincronização). Leitura pública dos vínculos;
- * escrita e o disparo manual exigem sessão de admin.
+ * Camada de acesso aos vínculos EA→jogador (a sincronização em si roda
+ * localmente, ver scripts/ea-sync-local.mjs — a EA bloqueia chamadas de
+ * servidores de nuvem). Leitura pública; escrita exige sessão de admin.
  */
 import { supabase } from './supabase'
 
@@ -32,40 +32,4 @@ export async function setEaPlayerMapping(eaPlayerId: string, playerId: string | 
     .update({ player_id: playerId, updated_at: new Date().toISOString() })
     .eq('ea_player_id', eaPlayerId)
   if (error) throw new Error('Falha ao salvar o vínculo.')
-}
-
-export interface EaSyncResult {
-  ok: boolean
-  matchesSeen: number
-  matchesNew: number
-  nightsCreated: number
-  skipped?: number
-  warning?: string // ex.: falha ao consultar a EA (não impede o restante do sync)
-}
-
-/**
- * Dispara a sincronização manual com a EA ("Sincronizar agora" no admin).
- * ATENÇÃO: /api não roda em `vite dev` — use `vercel dev` ou um deploy.
- */
-export async function syncEaNow(): Promise<EaSyncResult> {
-  const { data } = await supabase.auth.getSession()
-  const token = data.session?.access_token
-  if (!token) throw new Error('Sessão expirada — entre novamente.')
-
-  const r = await fetch('/api/ea-sync-manual', {
-    method: 'POST',
-    headers: { authorization: `Bearer ${token}` },
-  })
-  const text = await r.text()
-  let parsed: unknown = null
-  try {
-    parsed = text ? JSON.parse(text) : null
-  } catch {
-    // resposta não-JSON (ex.: rodando só com `vite dev`)
-  }
-  if (!r.ok) {
-    const msg = (parsed as { error?: string } | null)?.error ?? 'Falha ao sincronizar com a EA.'
-    throw new Error(msg)
-  }
-  return parsed as EaSyncResult
 }

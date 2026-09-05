@@ -11,7 +11,6 @@ import {
 import { Button, Card, Field, PageHeader, Select, TextArea, TextInput } from './ui'
 import { useConfirm, useToast } from './feedback'
 import { requestNightSummary } from '../lib/ai'
-import { syncEaNow } from '../lib/ea'
 
 interface NightRow {
   id: string
@@ -74,7 +73,6 @@ export default function AdminGames() {
   const [loading, setLoading] = useState(true)
   const [draft, setDraft] = useState<Partial<NightRow> | null>(null)
   const [selected, setSelected] = useState<NightRow | null>(null)
-  const [syncing, setSyncing] = useState(false)
 
   const loadNights = useCallback(async () => {
     setLoading(true)
@@ -127,29 +125,6 @@ export default function AdminGames() {
     toast('Noite removida.', 'success')
   }
 
-  async function syncNow() {
-    if (syncing) return
-    setSyncing(true)
-    try {
-      const r = await syncEaNow()
-      if (r.warning) {
-        toast(r.warning, 'error')
-      } else {
-        toast(
-          r.matchesNew > 0
-            ? `${r.matchesNew} partida(s) nova(s) sincronizada(s) da EA.`
-            : 'Nenhuma partida nova — já está tudo em dia.',
-          'success',
-        )
-      }
-      await loadNights()
-    } catch (err) {
-      toast(err instanceof Error ? err.message : 'Falha ao sincronizar com a EA.', 'error')
-    } finally {
-      setSyncing(false)
-    }
-  }
-
   if (selected) {
     return <NightEditor night={selected} onBack={() => setSelected(null)} />
   }
@@ -197,16 +172,16 @@ export default function AdminGames() {
       <PageHeader
         title="Noites de jogo"
         action={
-          <div className="flex gap-2">
-            <Button onClick={syncNow} disabled={syncing}>
-              {syncing ? 'Sincronizando…' : 'Sincronizar agora (EA)'}
-            </Button>
-            <Button variant="primary" onClick={() => setDraft({ title: '', date: todayIso() })}>
-              + Nova noite
-            </Button>
-          </div>
+          <Button variant="primary" onClick={() => setDraft({ title: '', date: todayIso() })}>
+            + Nova noite
+          </Button>
         }
       />
+      <p className="mb-6 text-xs text-[var(--text-50)]">
+        Partidas da EA são sincronizadas por um script local (roda no seu PC, não no site — a EA
+        bloqueia chamadas de servidores de nuvem). Rode <code>npm run sync:ea</code> ou configure o
+        Agendador de Tarefas do Windows para rodar diariamente.
+      </p>
       {loading && <p className="text-[var(--text-50)]">Carregando…</p>}
       <div className="space-y-3">
         {nights.map((n) => (
