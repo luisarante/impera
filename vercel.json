@@ -7,7 +7,7 @@
     "api/ea-sync-manual.js": { "maxDuration": 30 }
   },
   "crons": [
-    { "path": "/api/ea-sync", "schedule": "0 * * * *" }
+    { "path": "/api/ea-sync", "schedule": "0 12 * * *" }
   ],
   "rewrites": [
     { "source": "/noticias/:id", "destination": "/api/news-og?id=:id" },
