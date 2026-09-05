@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useClubData } from '../../lib/data/ClubDataContext'
 import { fetchSeasonStats, type MatchLite, type SeasonStats } from '../../lib/stats'
+import { fetchEaCareerStats, fetchEaClubStats, type EaClubStats, type EaPlayerCareer } from '../../lib/ea'
 import PlayerLink from '../ui/PlayerLink'
 
 function StatTile({ label, value, gold }: { label: string; value: string | number; gold?: boolean }) {
@@ -59,6 +60,8 @@ export default function StatsPage() {
   const [stats, setStats] = useState<SeasonStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [eaClub, setEaClub] = useState<EaClubStats | null>(null)
+  const [eaCareers, setEaCareers] = useState<EaPlayerCareer[]>([])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -69,6 +72,14 @@ export default function StatsPage() {
       setError('Não foi possível carregar as estatísticas.')
     } finally {
       setLoading(false)
+    }
+    // Números oficiais da EA (histórico completo) — extra, não bloqueia a página.
+    try {
+      const [clubStats, careers] = await Promise.all([fetchEaClubStats(), fetchEaCareerStats()])
+      setEaClub(clubStats)
+      setEaCareers(careers)
+    } catch {
+      // painel opcional — falha silenciosa não deve travar o resto da página
     }
   }, [club.seasonStart])
 
@@ -184,6 +195,81 @@ export default function StatsPage() {
               </button>
             </div>
           </>
+        )}
+
+        {eaClub && (
+          <div className="mt-16 border-t border-[var(--hairline)] pt-10">
+            <span className="eyebrow" style={{ color: 'var(--color-gold)' }}>
+              Histórico completo · dados oficiais da EA
+            </span>
+
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <StatTile label="Jogos (liga)" value={eaClub.gamesPlayed} />
+              <StatTile label="Jogos (playoff)" value={eaClub.gamesPlayedPlayoff} />
+              <StatTile label="Vitórias" value={eaClub.wins} gold />
+              <StatTile label="Empates" value={eaClub.ties} />
+              <StatTile label="Derrotas" value={eaClub.losses} />
+              <StatTile label="Gols pró" value={eaClub.goals} />
+              <StatTile label="Gols contra" value={eaClub.goalsAgainst} />
+              <StatTile label="Saldo" value={`${eaClub.goals - eaClub.goalsAgainst >= 0 ? '+' : ''}${eaClub.goals - eaClub.goalsAgainst}`} />
+              <StatTile label="Promoções" value={eaClub.promotions} gold />
+              <StatTile label="Rebaixamentos" value={eaClub.relegations} />
+              <StatTile label="Troféus (1º lugar)" value={eaClub.titles} gold />
+              {eaClub.skillRating != null && <StatTile label="Skill rating" value={eaClub.skillRating} />}
+            </div>
+
+            {(eaClub.winStreak > 1 || eaClub.unbeatenStreak > 1) && (
+              <div className="mt-6 flex flex-col items-center rounded-xl border border-[color-mix(in_srgb,var(--color-gold)_40%,transparent)] bg-[color-mix(in_srgb,var(--color-gold)_5%,transparent)] px-5 py-5 text-center">
+                <span className="eyebrow" style={{ color: 'var(--color-gold)' }}>
+                  Sequência (histórico EA)
+                </span>
+                <p className="mt-2 text-xl font-bold uppercase tracking-[0.02em]">
+                  {eaClub.winStreak > 1
+                    ? `${eaClub.winStreak} vitórias seguidas`
+                    : `invicto há ${eaClub.unbeatenStreak} jogos`}
+                </p>
+              </div>
+            )}
+
+            {eaCareers.length > 0 && (
+              <div className="mt-8">
+                <h3 className="text-sm uppercase tracking-[0.14em] text-[var(--color-gold)]">
+                  Carreira dos jogadores (EA)
+                </h3>
+                <div className="mt-4 overflow-x-auto">
+                  <table className="w-full min-w-[480px] text-sm">
+                    <thead>
+                      <tr className="border-b border-[var(--hairline)] text-left text-[0.65rem] uppercase tracking-[0.12em] text-[var(--text-50)]">
+                        <th className="py-2 pr-3">Jogador</th>
+                        <th className="px-2 py-2 text-right">Jogos</th>
+                        <th className="px-2 py-2 text-right">Gols</th>
+                        <th className="px-2 py-2 text-right">Assist.</th>
+                        <th className="px-2 py-2 text-right">Craques</th>
+                        <th className="py-2 pl-2 text-right">Média</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {eaCareers.map((c) => {
+                        const player = c.playerId ? squad.find((p) => p.id === c.playerId) : null
+                        return (
+                          <tr key={c.personaName} className="border-b border-[var(--hairline)]/50">
+                            <td className="py-2 pr-3 font-medium">
+                              {player ? <PlayerLink id={player.id} name={player.name} /> : c.personaName}
+                            </td>
+                            <td className="px-2 py-2 text-right tabular-nums">{c.gamesPlayed}</td>
+                            <td className="px-2 py-2 text-right tabular-nums text-[var(--color-gold)]">{c.goals}</td>
+                            <td className="px-2 py-2 text-right tabular-nums">{c.assists}</td>
+                            <td className="px-2 py-2 text-right tabular-nums">{c.motm}</td>
+                            <td className="py-2 pl-2 text-right tabular-nums">{c.ratingAvg?.toFixed(1) ?? '–'}</td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
         )}
       </div>
     </div>

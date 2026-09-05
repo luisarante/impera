@@ -9,7 +9,12 @@
 // EA_PLATFORM.
 
 import { createClient } from '@supabase/supabase-js'
-import { fetchEaClubMatches, envClubId } from './_eaClient.js'
+import {
+  fetchEaClubMatches,
+  fetchEaClubOverallStats,
+  fetchEaMemberCareerStats,
+  envClubId,
+} from './_eaClient.js'
 
 function dbClient() {
   const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
@@ -173,6 +178,63 @@ async function syncMatchStats(db, matchId, nightId, stats) {
   }
 }
 
+/**
+ * Números de resumo do clube e carreira dos jogadores (sobrescreve a cada
+ * rodada — não é histórico incremental como as partidas). Best-effort: uma
+ * falha aqui não deve derrubar o sync de partidas.
+ */
+async function syncClubSummary(db, clubId) {
+  const overall = await fetchEaClubOverallStats()
+  if (overall) {
+    const divisionFinishes = {}
+    for (const [k, v] of Object.entries(overall)) {
+      if (k.startsWith('finishesIn')) divisionFinishes[k] = Number(v)
+    }
+    const { error } = await db.from('ea_club_stats').upsert(
+      {
+        club_id: clubId,
+        games_played: Number(overall.gamesPlayed ?? 0),
+        games_played_playoff: Number(overall.gamesPlayedPlayoff ?? 0),
+        wins: Number(overall.wins ?? 0),
+        losses: Number(overall.losses ?? 0),
+        ties: Number(overall.ties ?? 0),
+        goals: Number(overall.goals ?? 0),
+        goals_against: Number(overall.goalsAgainst ?? 0),
+        promotions: Number(overall.promotions ?? 0),
+        relegations: Number(overall.relegations ?? 0),
+        best_division: overall.bestDivision != null ? Number(overall.bestDivision) : null,
+        best_finish_group: overall.bestFinishGroup != null ? Number(overall.bestFinishGroup) : null,
+        skill_rating: overall.skillRating != null ? Number(overall.skillRating) : null,
+        win_streak: Number(overall.wstreak ?? 0),
+        unbeaten_streak: Number(overall.unbeatenstreak ?? 0),
+        league_appearances: Number(overall.leagueAppearances ?? 0),
+        division_finishes: divisionFinishes,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'club_id' },
+    )
+    if (error) throw new Error(`ea_club_stats: ${error.message}`)
+  }
+
+  const members = await fetchEaMemberCareerStats()
+  if (members.length) {
+    const rows = members
+      .filter((m) => m.name)
+      .map((m) => ({
+        ea_persona_name: m.name,
+        games_played: Number(m.gamesPlayed ?? 0),
+        goals: Number(m.goals ?? 0),
+        assists: Number(m.assists ?? 0),
+        man_of_the_match: Number(m.manOfTheMatch ?? 0),
+        rating_avg: m.ratingAve != null && m.ratingAve !== '' ? Number(m.ratingAve) : null,
+        favorite_position: m.favoritePosition || null,
+        updated_at: new Date().toISOString(),
+      }))
+    const { error } = await db.from('ea_member_career_stats').upsert(rows, { onConflict: 'ea_persona_name' })
+    if (error) throw new Error(`ea_member_career_stats: ${error.message}`)
+  }
+}
+
 /** Roda a sincronização completa. Devolve um resumo; lança se o job falhar por inteiro. */
 export async function runEaSync() {
   const db = dbClient()
@@ -235,6 +297,13 @@ export async function runEaSync() {
           console.error(`Falha ao sincronizar partida EA ${m.eaMatchId}:`, matchErr)
         }
       }
+    }
+
+    try {
+      await syncClubSummary(db, clubId)
+    } catch (summaryErr) {
+      console.error('Falha ao sincronizar resumo do clube/carreira:', summaryErr)
+      fetchErrors.push(`resumo do clube: ${summaryErr.message}`)
     }
 
     const warning = fetchErrors.length ? `Falha ao buscar da EA: ${fetchErrors.join('; ')}` : null

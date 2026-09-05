@@ -4,7 +4,7 @@
 //
 // Env vars: EA_CLUB_ID, EA_PLATFORM (ex.: 'common-gen5').
 
-const BASE = 'https://proclubs.ea.com/api/fc/clubs'
+const BASE = 'https://proclubs.ea.com/api/fc'
 const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
 
@@ -43,7 +43,7 @@ export async function fetchEaClubMatches() {
   const errors = []
   const results = await Promise.all(
     types.map((matchType) =>
-      eaFetch('/matches', { matchType, platform, clubIds: clubId })
+      eaFetch('/clubs/matches', { matchType, platform, clubIds: clubId })
         .then((data) => (Array.isArray(data) ? data.map((m) => ({ ...m, matchType })) : []))
         .catch((e) => {
           errors.push(`${matchType}: ${e.message}`)
@@ -52,6 +52,31 @@ export async function fetchEaClubMatches() {
     ),
   )
   return { matches: results.flat(), errors }
+}
+
+/**
+ * Resumo acumulado do clube (jogos, vitórias, promoções/rebaixamentos,
+ * quantas vezes terminou em 1º em cada divisão). Devolve `null` em falha —
+ * é um extra "best-effort", não deve derrubar o sync de partidas.
+ */
+export async function fetchEaClubOverallStats() {
+  const clubId = envClubId()
+  const platform = envPlatform()
+  const data = await eaFetch('/clubs/overallStats', { platform, clubIds: clubId })
+  const row = Array.isArray(data) ? data[0] : null
+  return row && row.clubId ? row : null
+}
+
+/**
+ * Carreira acumulada de cada jogador que já apareceu pelo clube (jogos,
+ * gols, assistências, craques da partida, rating médio). Só o nome da
+ * persona identifica o jogador aqui (sem id estável).
+ */
+export async function fetchEaMemberCareerStats() {
+  const clubId = envClubId()
+  const platform = envPlatform()
+  const data = await eaFetch('/members/career/stats', { platform, clubId })
+  return Array.isArray(data?.members) ? data.members : []
 }
 
 export { envClubId, envPlatform }
