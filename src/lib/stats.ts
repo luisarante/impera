@@ -44,6 +44,52 @@ interface MatchRow {
   sort_order: number
 }
 
+/** Retrospecto histórico (todas as partidas com placar, temporadas passadas incluídas). */
+export interface RivalStats {
+  opponent: string
+  played: number
+  wins: number
+  draws: number
+  losses: number
+  goalsFor: number
+  goalsAgainst: number
+}
+
+/** Maiores rivais (adversários mais enfrentados), do histórico completo. */
+export async function fetchRivals(limit = 5): Promise<RivalStats[]> {
+  const { data, error } = await supabase
+    .from('matches')
+    .select('opponent, our_score, opp_score')
+    .not('our_score', 'is', null)
+    .not('opp_score', 'is', null)
+  if (error) throw new Error('Falha ao carregar o histórico de confrontos.')
+
+  const byOpponent = new Map<string, RivalStats>()
+  for (const m of data ?? []) {
+    const opponent = (m.opponent as string).trim()
+    const cur = byOpponent.get(opponent) ?? {
+      opponent,
+      played: 0,
+      wins: 0,
+      draws: 0,
+      losses: 0,
+      goalsFor: 0,
+      goalsAgainst: 0,
+    }
+    const our = m.our_score as number
+    const opp = m.opp_score as number
+    cur.played += 1
+    cur.goalsFor += our
+    cur.goalsAgainst += opp
+    if (our > opp) cur.wins += 1
+    else if (our < opp) cur.losses += 1
+    else cur.draws += 1
+    byOpponent.set(opponent, cur)
+  }
+
+  return [...byOpponent.values()].sort((a, b) => b.played - a.played).slice(0, limit)
+}
+
 export async function fetchSeasonStats(seasonStart: string | null): Promise<SeasonStats> {
   let nq = supabase.from('game_nights').select('id,date')
   if (seasonStart) nq = nq.gte('date', seasonStart)

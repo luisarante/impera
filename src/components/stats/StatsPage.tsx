@@ -1,8 +1,16 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useClubData } from '../../lib/data/ClubDataContext'
-import { fetchSeasonStats, type MatchLite, type SeasonStats } from '../../lib/stats'
-import { fetchEaCareerStats, fetchEaClubStats, type EaClubStats, type EaPlayerCareer } from '../../lib/ea'
+import { fetchRivals, fetchSeasonStats, type MatchLite, type RivalStats, type SeasonStats } from '../../lib/stats'
+import {
+  fetchEaCareerStats,
+  fetchEaClubStats,
+  fetchEaClubStatsHistory,
+  type EaClubStats,
+  type EaClubStatsSnapshot,
+  type EaPlayerCareer,
+} from '../../lib/ea'
+import SkillRatingChart from './SkillRatingChart'
 import PlayerLink from '../ui/PlayerLink'
 
 function StatTile({ label, value, gold }: { label: string; value: string | number; gold?: boolean }) {
@@ -62,6 +70,8 @@ export default function StatsPage() {
   const [error, setError] = useState<string | null>(null)
   const [eaClub, setEaClub] = useState<EaClubStats | null>(null)
   const [eaCareers, setEaCareers] = useState<EaPlayerCareer[]>([])
+  const [eaHistory, setEaHistory] = useState<EaClubStatsSnapshot[]>([])
+  const [rivals, setRivals] = useState<RivalStats[]>([])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -75,9 +85,16 @@ export default function StatsPage() {
     }
     // Números oficiais da EA (histórico completo) — extra, não bloqueia a página.
     try {
-      const [clubStats, careers] = await Promise.all([fetchEaClubStats(), fetchEaCareerStats()])
+      const [clubStats, careers, history, rivalsList] = await Promise.all([
+        fetchEaClubStats(),
+        fetchEaCareerStats(),
+        fetchEaClubStatsHistory(),
+        fetchRivals(),
+      ])
       setEaClub(clubStats)
       setEaCareers(careers)
+      setEaHistory(history)
+      setRivals(rivalsList)
     } catch {
       // painel opcional — falha silenciosa não deve travar o resto da página
     }
@@ -218,6 +235,15 @@ export default function StatsPage() {
               {eaClub.skillRating != null && <StatTile label="Skill rating" value={eaClub.skillRating} />}
             </div>
 
+            {eaHistory.length > 1 && (
+              <div className="mt-8">
+                <h3 className="text-sm uppercase tracking-[0.14em] text-[var(--color-gold)]">
+                  Evolução do Skill Rating
+                </h3>
+                <SkillRatingChart history={eaHistory} />
+              </div>
+            )}
+
             {(eaClub.winStreak > 1 || eaClub.unbeatenStreak > 1) && (
               <div className="mt-6 flex flex-col items-center rounded-xl border border-[color-mix(in_srgb,var(--color-gold)_40%,transparent)] bg-[color-mix(in_srgb,var(--color-gold)_5%,transparent)] px-5 py-5 text-center">
                 <span className="eyebrow" style={{ color: 'var(--color-gold)' }}>
@@ -269,6 +295,43 @@ export default function StatsPage() {
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {rivals.length > 0 && (
+          <div className={eaClub ? 'mt-10' : 'mt-16 border-t border-[var(--hairline)] pt-10'}>
+            <h3 className="text-sm uppercase tracking-[0.14em] text-[var(--color-gold)]">
+              Maiores rivais (histórico completo)
+            </h3>
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full min-w-[420px] text-sm">
+                <thead>
+                  <tr className="border-b border-[var(--hairline)] text-left text-[0.65rem] uppercase tracking-[0.12em] text-[var(--text-50)]">
+                    <th className="py-2 pr-3">Adversário</th>
+                    <th className="px-2 py-2 text-right">Jogos</th>
+                    <th className="px-2 py-2 text-right">V</th>
+                    <th className="px-2 py-2 text-right">E</th>
+                    <th className="px-2 py-2 text-right">D</th>
+                    <th className="py-2 pl-2 text-right">Saldo</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rivals.map((r) => (
+                    <tr key={r.opponent} className="border-b border-[var(--hairline)]/50">
+                      <td className="py-2 pr-3 font-medium">{r.opponent}</td>
+                      <td className="px-2 py-2 text-right tabular-nums">{r.played}</td>
+                      <td className="px-2 py-2 text-right tabular-nums text-[var(--color-gold)]">{r.wins}</td>
+                      <td className="px-2 py-2 text-right tabular-nums">{r.draws}</td>
+                      <td className="px-2 py-2 text-right tabular-nums">{r.losses}</td>
+                      <td className="py-2 pl-2 text-right tabular-nums">
+                        {r.goalsFor - r.goalsAgainst >= 0 ? '+' : ''}
+                        {r.goalsFor - r.goalsAgainst}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </div>

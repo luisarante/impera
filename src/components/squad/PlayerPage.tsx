@@ -2,7 +2,10 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useClubData } from '../../lib/data/ClubDataContext'
 import { fetchMvpTitleCount } from '../../lib/games'
+import { aggregateCareerByPlayer, fetchEaCareerStats, type PlayerCareerAgg } from '../../lib/ea'
 import PlayerComments from './PlayerComments'
+
+type EaCrown = 'scorer' | 'assister' | null
 
 /**
  * PÁGINA DEDICADA DO JOGADOR (/elenco/:id).
@@ -15,6 +18,8 @@ export default function PlayerPage() {
   const player = squad.find((p) => p.id === id) ?? null
   const [photoOk, setPhotoOk] = useState(Boolean(player?.photo))
   const [mvpTitles, setMvpTitles] = useState<number | null>(null)
+  const [eaCareer, setEaCareer] = useState<PlayerCareerAgg | null>(null)
+  const [eaCrown, setEaCrown] = useState<EaCrown>(null)
 
   useEffect(() => {
     window.scrollTo(0, 0)
@@ -31,6 +36,37 @@ export default function PlayerPage() {
       })
       .catch(() => {
         if (alive) setMvpTitles(0)
+      })
+    return () => {
+      alive = false
+    }
+  }, [id])
+
+  // Carreira acumulada na EA (histórico completo, não só as ~10 últimas partidas)
+  // e se este jogador é o artilheiro/garçom da história do elenco.
+  useEffect(() => {
+    if (!id) return
+    let alive = true
+    setEaCareer(null)
+    setEaCrown(null)
+    fetchEaCareerStats()
+      .then((careers) => {
+        if (!alive) return
+        const byPlayer = aggregateCareerByPlayer(careers)
+        const mine = byPlayer.get(id) ?? null
+        setEaCareer(mine)
+        if (!mine) return
+        let topScorer = mine.goals > 0
+        let topAssister = mine.assists > 0
+        for (const [pid, agg] of byPlayer) {
+          if (pid === id) continue
+          if (agg.goals > mine.goals) topScorer = false
+          if (agg.assists > mine.assists) topAssister = false
+        }
+        setEaCrown(topScorer ? 'scorer' : topAssister ? 'assister' : null)
+      })
+      .catch(() => {
+        /* seção opcional — falha silenciosa */
       })
     return () => {
       alive = false
@@ -123,13 +159,27 @@ export default function PlayerPage() {
                 {player.starter ? ' · Titular' : ' · Reserva'}
               </p>
 
-              {mvpTitles != null && mvpTitles > 0 && (
-                <p className="mt-4 inline-flex items-center gap-2 rounded-full border border-[var(--color-gold)] px-3 py-1 text-sm font-semibold text-[var(--color-gold)]">
-                  <span aria-hidden>👑</span>
-                  Craque da noite · {mvpTitles}
-                  {mvpTitles === 1 ? ' vez' : ' vezes'}
-                </p>
-              )}
+              <div className="mt-4 flex flex-wrap gap-2">
+                {mvpTitles != null && mvpTitles > 0 && (
+                  <p className="inline-flex items-center gap-2 rounded-full border border-[var(--color-gold)] px-3 py-1 text-sm font-semibold text-[var(--color-gold)]">
+                    <span aria-hidden>👑</span>
+                    Craque da noite · {mvpTitles}
+                    {mvpTitles === 1 ? ' vez' : ' vezes'}
+                  </p>
+                )}
+                {eaCrown === 'scorer' && (
+                  <p className="inline-flex items-center gap-2 rounded-full border border-[var(--color-gold)] px-3 py-1 text-sm font-semibold text-[var(--color-gold)]">
+                    <span aria-hidden>⚽👑</span>
+                    Artilheiro da história
+                  </p>
+                )}
+                {eaCrown === 'assister' && (
+                  <p className="inline-flex items-center gap-2 rounded-full border border-[var(--color-gold)] px-3 py-1 text-sm font-semibold text-[var(--color-gold)]">
+                    <span aria-hidden>🎯👑</span>
+                    Garçom da história
+                  </p>
+                )}
+              </div>
 
               {player.dilemma && <p className="ficha__dilemma">{player.dilemma}</p>}
               {player.description && <p className="ficha__desc">{player.description}</p>}
@@ -148,6 +198,38 @@ export default function PlayerPage() {
                   <dd>{player.role}</dd>
                 </div>
               </dl>
+
+              {eaCareer && (
+                <div className="mt-8">
+                  <h3 className="eyebrow mb-3" style={{ color: accent }}>
+                    Carreira na EA
+                  </h3>
+                  <dl className="ficha__grid">
+                    <div>
+                      <dt>Jogos</dt>
+                      <dd>{eaCareer.gamesPlayed}</dd>
+                    </div>
+                    <div>
+                      <dt>Gols</dt>
+                      <dd>{eaCareer.goals}</dd>
+                    </div>
+                    <div>
+                      <dt>Assistências</dt>
+                      <dd>{eaCareer.assists}</dd>
+                    </div>
+                    <div>
+                      <dt>Craques da partida</dt>
+                      <dd>{eaCareer.motm}</dd>
+                    </div>
+                    {eaCareer.ratingAvg != null && (
+                      <div>
+                        <dt>Média (rating)</dt>
+                        <dd>{eaCareer.ratingAvg.toFixed(1)}</dd>
+                      </div>
+                    )}
+                  </dl>
+                </div>
+              )}
             </div>
           </div>
 

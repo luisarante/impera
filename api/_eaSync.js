@@ -231,6 +231,31 @@ async function syncClubSummary(db, clubId) {
       if (val == null) continue
       await db.from('big_numbers').update({ value: String(val), numeric_value: val }).eq('id', row.id)
     }
+
+    // Histórico de evolução (gráfico em /estatisticas): só insere uma linha
+    // nova quando algo relevante mudou desde a última rodada — evita crescer
+    // a tabela sem necessidade em sincronizações sem jogo novo.
+    const snapshot = {
+      skill_rating: overall.skillRating != null ? Number(overall.skillRating) : null,
+      wins: Number(overall.wins ?? 0),
+      losses: Number(overall.losses ?? 0),
+      ties: Number(overall.ties ?? 0),
+      goals: Number(overall.goals ?? 0),
+      goals_against: Number(overall.goalsAgainst ?? 0),
+      best_division: overall.bestDivision != null ? Number(overall.bestDivision) : null,
+    }
+    const { data: lastSnap } = await db
+      .from('ea_club_stats_history')
+      .select('skill_rating, wins, losses, ties, goals, goals_against, best_division')
+      .eq('club_id', clubId)
+      .order('recorded_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    const changed = !lastSnap || Object.keys(snapshot).some((k) => lastSnap[k] !== snapshot[k])
+    if (changed) {
+      const { error: histErr } = await db.from('ea_club_stats_history').insert({ club_id: clubId, ...snapshot })
+      if (histErr) throw new Error(`ea_club_stats_history: ${histErr.message}`)
+    }
   }
 
   const members = await fetchEaMemberCareerStats()
@@ -250,6 +275,29 @@ async function syncClubSummary(db, clubId) {
     const { error } = await db.from('ea_member_career_stats').upsert(rows, { onConflict: 'ea_persona_name' })
     if (error) throw new Error(`ea_member_career_stats: ${error.message}`)
   }
+}
+
+/**
+ * Recalcula o título de uma noite EA a partir de TODAS as partidas dela
+ * (ex.: "Sessão EA — 27/08/2026 (3V-1E-1D)"). Só mexe em noites com
+ * `ea_night_key` (nunca em noites manuais) — se o admin renomeou uma noite
+ * EA manualmente, uma próxima partida sincronizada nela sobrescreve o título.
+ */
+async function updateEaNightTitle(db, nightId) {
+  const { data: night } = await db.from('game_nights').select('date, ea_night_key').eq('id', nightId).maybeSingle()
+  if (!night?.ea_night_key) return
+
+  const { data: matches } = await db.from('matches').select('our_score, opp_score').eq('night_id', nightId)
+  let w = 0, d = 0, l = 0
+  for (const m of matches ?? []) {
+    if (m.our_score == null || m.opp_score == null) continue
+    if (m.our_score > m.opp_score) w++
+    else if (m.our_score < m.opp_score) l++
+    else d++
+  }
+  const dateBr = String(night.date).split('-').reverse().join('/')
+  const title = `Sessão EA — ${dateBr} (${w}V-${d}E-${l}D)`
+  await db.from('game_nights').update({ title }).eq('id', nightId)
 }
 
 /** Roda a sincronização completa. Devolve um resumo; lança se o job falhar por inteiro. */
@@ -313,6 +361,18 @@ export async function runEaSync() {
         } catch (matchErr) {
           console.error(`Falha ao sincronizar partida EA ${m.eaMatchId}:`, matchErr)
         }
+      }
+    }
+
+    // Recalcula o título de TODAS as noites EA a cada rodada (barato — são
+    // poucas noites), não só as que ganharam partida nova agora: garante que
+    // o V-E-D fique correto mesmo em rodadas sem novidade.
+    const { data: eaNights } = await db.from('game_nights').select('id').not('ea_night_key', 'is', null)
+    for (const n of eaNights ?? []) {
+      try {
+        await updateEaNightTitle(db, n.id)
+      } catch (titleErr) {
+        console.error(`Falha ao atualizar título da noite ${n.id}:`, titleErr)
       }
     }
 

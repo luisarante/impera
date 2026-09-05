@@ -94,6 +94,40 @@ export interface EaPlayerCareer {
   favoritePosition: string | null
 }
 
+/** Carreira somada por jogador (soma personas, caso o jogador já tenha trocado de gamertag). */
+export interface PlayerCareerAgg {
+  gamesPlayed: number
+  goals: number
+  assists: number
+  motm: number
+  ratingAvg: number | null
+}
+
+export function aggregateCareerByPlayer(careers: EaPlayerCareer[]): Map<string, PlayerCareerAgg> {
+  const byPlayer = new Map<string, PlayerCareerAgg & { ratingWeighted: number }>()
+  for (const c of careers) {
+    if (!c.playerId) continue
+    const cur = byPlayer.get(c.playerId) ?? { gamesPlayed: 0, goals: 0, assists: 0, motm: 0, ratingAvg: null, ratingWeighted: 0 }
+    cur.gamesPlayed += c.gamesPlayed
+    cur.goals += c.goals
+    cur.assists += c.assists
+    cur.motm += c.motm
+    if (c.ratingAvg != null) cur.ratingWeighted += c.ratingAvg * c.gamesPlayed
+    byPlayer.set(c.playerId, cur)
+  }
+  const result = new Map<string, PlayerCareerAgg>()
+  for (const [playerId, v] of byPlayer) {
+    result.set(playerId, {
+      gamesPlayed: v.gamesPlayed,
+      goals: v.goals,
+      assists: v.assists,
+      motm: v.motm,
+      ratingAvg: v.gamesPlayed ? Math.round((v.ratingWeighted / v.gamesPlayed) * 10) / 10 : null,
+    })
+  }
+  return result
+}
+
 export async function fetchEaCareerStats(): Promise<EaPlayerCareer[]> {
   const [{ data: careerRows, error: careerErr }, { data: mapRows }] = await Promise.all([
     supabase.from('ea_member_career_stats').select('*').order('goals', { ascending: false }),
@@ -112,5 +146,35 @@ export async function fetchEaCareerStats(): Promise<EaPlayerCareer[]> {
     motm: (r.man_of_the_match as number) ?? 0,
     ratingAvg: (r.rating_avg as number) ?? null,
     favoritePosition: (r.favorite_position as string) ?? null,
+  }))
+}
+
+/** Um "print" dos números do clube num momento — alimenta o gráfico de evolução. */
+export interface EaClubStatsSnapshot {
+  recordedAt: string
+  skillRating: number | null
+  wins: number
+  losses: number
+  ties: number
+  goals: number
+  goalsAgainst: number
+  bestDivision: number | null
+}
+
+export async function fetchEaClubStatsHistory(): Promise<EaClubStatsSnapshot[]> {
+  const { data, error } = await supabase
+    .from('ea_club_stats_history')
+    .select('*')
+    .order('recorded_at', { ascending: true })
+  if (error) throw new Error('Falha ao carregar o histórico de evolução do clube.')
+  return (data ?? []).map((r) => ({
+    recordedAt: r.recorded_at as string,
+    skillRating: (r.skill_rating as number) ?? null,
+    wins: (r.wins as number) ?? 0,
+    losses: (r.losses as number) ?? 0,
+    ties: (r.ties as number) ?? 0,
+    goals: (r.goals as number) ?? 0,
+    goalsAgainst: (r.goals_against as number) ?? 0,
+    bestDivision: (r.best_division as number) ?? null,
   }))
 }
