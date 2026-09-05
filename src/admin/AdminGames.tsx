@@ -132,12 +132,16 @@ export default function AdminGames() {
     setSyncing(true)
     try {
       const r = await syncEaNow()
-      toast(
-        r.matchesNew > 0
-          ? `${r.matchesNew} partida(s) nova(s) sincronizada(s) da EA.`
-          : 'Nenhuma partida nova — já está tudo em dia.',
-        'success',
-      )
+      if (r.warning) {
+        toast(r.warning, 'error')
+      } else {
+        toast(
+          r.matchesNew > 0
+            ? `${r.matchesNew} partida(s) nova(s) sincronizada(s) da EA.`
+            : 'Nenhuma partida nova — já está tudo em dia.',
+          'success',
+        )
+      }
       await loadNights()
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Falha ao sincronizar com a EA.', 'error')

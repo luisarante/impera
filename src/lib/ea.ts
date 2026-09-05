@@ -39,6 +39,8 @@ export interface EaSyncResult {
   matchesSeen: number
   matchesNew: number
   nightsCreated: number
+  skipped?: number
+  warning?: string // ex.: falha ao consultar a EA (não impede o restante do sync)
 }
 
 /**

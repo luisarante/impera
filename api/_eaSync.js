@@ -183,10 +183,11 @@ export async function runEaSync() {
 
   try {
     const clubId = envClubId()
-    const raw = await fetchEaClubMatches()
+    const { matches: raw, errors: fetchErrors } = await fetchEaClubMatches()
     matchesSeen = raw.length
 
     const normalized = raw.map((m) => normalizeMatch(m, clubId)).filter(Boolean)
+    const skipped = raw.length - normalized.length
 
     if (normalized.length) {
       const eaIds = normalized.map((m) => m.eaMatchId)
@@ -236,8 +237,16 @@ export async function runEaSync() {
       }
     }
 
-    await logRun(db, startedAt, true, matchesSeen, matchesNew, null)
-    return { ok: true, matchesSeen, matchesNew, nightsCreated }
+    const warning = fetchErrors.length ? `Falha ao buscar da EA: ${fetchErrors.join('; ')}` : null
+    await logRun(db, startedAt, true, matchesSeen, matchesNew, warning)
+    return {
+      ok: true,
+      matchesSeen,
+      matchesNew,
+      nightsCreated,
+      skipped: skipped || undefined,
+      warning: warning || undefined,
+    }
   } catch (err) {
     await logRun(db, startedAt, false, matchesSeen, matchesNew, err.message || String(err))
     throw err

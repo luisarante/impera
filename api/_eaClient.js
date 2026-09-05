@@ -33,23 +33,25 @@ async function eaFetch(path, params) {
 
 /**
  * Busca as partidas recentes do clube (liga + playoff). A EA só devolve as
- * ~10 mais recentes de cada tipo. Devolve um array já com `matchType` marcado.
+ * ~10 mais recentes de cada tipo. Devolve `{ matches, errors }`: erros de UM
+ * tipo não derrubam o outro, mas ficam visíveis (nunca somem silenciosos).
  */
 export async function fetchEaClubMatches() {
   const clubId = envClubId()
   const platform = envPlatform()
   const types = ['leagueMatch', 'playoffMatch']
+  const errors = []
   const results = await Promise.all(
     types.map((matchType) =>
       eaFetch('/matches', { matchType, platform, clubIds: clubId })
         .then((data) => (Array.isArray(data) ? data.map((m) => ({ ...m, matchType })) : []))
         .catch((e) => {
-          console.error(`Falha ao buscar partidas EA (${matchType}):`, e)
+          errors.push(`${matchType}: ${e.message}`)
           return []
         }),
     ),
   )
-  return results.flat()
+  return { matches: results.flat(), errors }
 }
 
 export { envClubId, envPlatform }
