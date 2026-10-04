@@ -135,6 +135,7 @@ create policy "profiles_update_own" on public.profiles
 -- Noticias (SilviaNews)
 create table public.news (
   id         text primary key default gen_random_uuid()::text,
+  official_account text not null default 'imperafc' check (official_account in ('imperafc', 'imperaow')),
   kicker     text not null,
   headline   text not null,
   lead       text not null,

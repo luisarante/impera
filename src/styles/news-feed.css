@@ -1,0 +1,159 @@
+/* Feed social: navegação lateral, coluna de posts e contas oficiais. */
+.instagram-page {
+  --feed-muted: #929292;
+  --feed-line: #292929;
+  min-height: 100svh;
+  background: #090909;
+  color: #f5f5f5;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+}
+.instagram-page :is(h1, h2, h3) { font-family: inherit; letter-spacing: normal; }
+.instagram-page :is(button, a) { -webkit-tap-highlight-color: transparent; }
+.instagram-page :is(button, a):focus-visible { outline: 2px solid #b9ec78; outline-offset: 5px; border-radius: 3px; }
+.instagram-page a { text-decoration: none; }
+.feed-sidebar { position: fixed; inset: 0 auto 0 0; z-index: 30; width: 230px; border-right: 1px solid var(--feed-line); padding: 35px 20px 25px; display: flex; flex-direction: column; background: #090909; }
+.feed-wordmark { display: inline-flex; align-items: baseline; gap: 6px; font-family: Georgia, 'Times New Roman', serif; font-size: 40px; font-style: italic; font-weight: 700; letter-spacing: -3px; line-height: 1; }
+.feed-wordmark span { color: #b9ec78; font-family: var(--font-display); font-size: 25px; font-style: normal; letter-spacing: 0; }
+.feed-sidebar > .feed-wordmark { margin: 0 12px 48px; }
+.feed-sidebar nav { display: grid; gap: 10px; }
+.feed-sidebar nav a { display: flex; align-items: center; gap: 16px; padding: 14px 12px; border-radius: 8px; font-size: 16px; transition: background .15s; }
+.feed-sidebar nav a:hover, .feed-sidebar__accounts a:hover { background: #ffffff0b; }
+.feed-sidebar nav a.is-active { font-weight: 700; }
+.feed-sidebar__accounts { display: grid; gap: 7px; margin-top: 34px; padding-top: 24px; border-top: 1px solid var(--feed-line); }
+.feed-sidebar__accounts > span { color: var(--feed-muted); font-size: 10px; letter-spacing: .12em; padding: 0 12px 10px; }
+.feed-sidebar__accounts a { display: flex; align-items: center; gap: 12px; padding: 10px; border-radius: 8px; font-size: 13px; }
+.feed-sidebar__accounts .official-avatar { width: 30px; height: 30px; font-size: 10px; }
+.feed-sidebar__accounts .official-avatar svg { width: 23px; height: 23px; }
+.feed-sidebar__accounts .is-active { background: #ffffff09; font-weight: 700; }
+.feed-sidebar__bottom { margin-top: auto; padding: 24px 12px 0; }
+.feed-sidebar__bottom .home-nav__account { padding: 0; border: 0; font-family: inherit; font-size: 13px; letter-spacing: normal; text-transform: none; color: #f5f5f5; }
+.feed-sidebar__bottom p, .feed-sidebar__bottom > a { font-size: 11px; color: var(--feed-muted); margin-top: 18px; }
+.feed-layout { margin-left: 230px; display: grid; grid-template-columns: minmax(0, 470px) 285px; justify-content: center; align-items: start; gap: clamp(32px, 5vw, 76px); padding: 32px 30px 60px; }
+.feed-main { min-width: 0; }
+.feed-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding: 8px 0 19px; border-bottom: 1px solid var(--feed-line); }
+.feed-heading h1 { font-size: 20px; font-weight: 700; }
+.feed-heading > span { font-size: 12px; color: var(--feed-muted); }
+.feed-stories { display: flex; gap: 24px; padding: 23px 0 25px; }
+.feed-stories button { display: flex; flex-direction: column; align-items: center; gap: 9px; min-width: 76px; font-size: 11px; color: #b8b8b8; }
+.feed-stories button.is-active { color: white; }
+.feed-story-ring { display: grid; place-items: center; padding: 3px; width: 74px; height: 74px; border-radius: 50%; background: linear-gradient(35deg, #e6bc50, #28b969 55%, #0a7145); }
+.feed-story-ring--imperaow { background: linear-gradient(35deg, #ffd46d, #e75f35 55%, #b73d89); }
+.feed-story-ring--all { background: #414141; }
+.feed-stories .is-active .feed-story-ring { box-shadow: 0 0 0 3px #090909, 0 0 0 4px #666; }
+.feed-story-ring .official-avatar, .feed-story-all { width: 68px; height: 68px; border: 4px solid #090909; border-radius: 50%; font-size: 19px; }
+.feed-story-ring .official-avatar svg { width: 42px; height: 42px; }
+.feed-story-all { display: grid; place-items: center; background: #1c1c1c; }
+.feed-verified { display: inline-flex; vertical-align: middle; color: #429aff; }
+.feed-verified svg { width: 14px; height: 14px; }
+.feed-verified svg path { stroke: white; stroke-width: 2.3; fill: none; }
+.feed-post { border-bottom: 1px solid var(--feed-line); padding-bottom: 18px; margin-bottom: 20px; }
+.feed-post__header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; }
+.feed-post__identity { display: flex; align-items: center; gap: 11px; min-width: 0; }
+.feed-post__identity .official-avatar { width: 34px; height: 34px; font-size: 11px; border-color: #ffffff25; }
+.feed-post__identity .official-avatar svg { width: 25px; height: 25px; }
+.feed-post__identity strong { display: flex; align-items: center; gap: 6px; font-weight: 600; font-size: 13px; }
+.feed-post__identity small { display: block; margin-top: 3px; color: #b5b5b5; font-size: 11px; }
+.feed-icon-button { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 40px; min-height: 40px; color: #f5f5f5; }
+.feed-icon-button:hover { color: #a0a0a0; }
+.feed-post__open { width: 32px; color: #aaa; }
+.feed-post__open svg { width: 19px; height: 19px; }
+.feed-post__media { display: block; overflow: hidden; border: 1px solid #ffffff18; border-radius: 3px; background: #141414; }
+.feed-post__media > img { display: block; width: 100%; height: auto; max-height: 588px; object-fit: contain; }
+.feed-post__art { aspect-ratio: 1; display: flex; flex-direction: column; justify-content: space-between; padding: 34px; gap: 28px; background: radial-gradient(at top right, #365331, #102619); }
+.feed-post--imperaow .feed-post__art { background: radial-gradient(at top right, #754824, #271b14); }
+.feed-post__art > span { display: flex; justify-content: space-between; font-size: 18px; font-weight: 700; letter-spacing: -.04em; }
+.feed-post__art > strong { font-family: var(--font-display); font-size: clamp(26px, 3vw, 36px); line-height: 1.17; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 7; -webkit-box-orient: vertical; overflow: hidden; }
+.feed-post__art > small { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+.feed-post__actions { display: flex; align-items: center; gap: 4px; padding-top: 7px; margin-left: -8px; margin-right: -8px; }
+.feed-post__actions svg { width: 25px; height: 25px; }
+.feed-post__save { margin-left: auto; }
+.feed-icon-button.is-liked, .feed-icon-button.is-liked:hover { color: #ff465b; }
+.feed-post__liked { margin: 4px 0 9px; font-size: 13px; }
+.feed-post__caption { font-size: 14px; line-height: 1.55; margin: 5px 0 8px; overflow-wrap: anywhere; }
+.feed-post__caption > a { font-weight: 600; margin-right: 3px; }
+.feed-post__caption > button { color: var(--feed-muted); }
+.feed-post__read { display: inline-block; font-size: 13px; color: var(--feed-muted); margin: 0 0 9px; }
+.feed-post__read:hover { color: #f5f5f5; }
+.feed-post__date { display: block; color: var(--feed-muted); font-size: 10px; letter-spacing: .04em; text-transform: uppercase; }
+.feed-post__status { color: #b9ec78; font-size: 12px; margin-top: 10px; }
+.feed-post__status:empty { display: none; }
+.feed-profile { padding: 8px 0 25px; border-bottom: 1px solid var(--feed-line); margin-bottom: 12px; }
+.feed-profile__top { display: flex; align-items: center; gap: 25px; margin: 10px 0 20px; }
+.feed-profile__top .official-avatar { width: 88px; height: 88px; font-size: 26px; }
+.feed-profile__top .official-avatar svg { width: 57px; height: 57px; }
+.feed-profile h2 { display: flex; align-items: center; gap: 8px; font-size: 21px; }
+.feed-profile__top p { margin: 10px 0 7px; font-size: 13px; }
+.feed-profile__top > div > span { font-size: 12px; color: var(--feed-muted); }
+.feed-profile h3 { font-size: 14px; font-weight: 600; }
+.feed-profile > p { line-height: 1.6; font-size: 13px; margin: 7px 0; }
+.feed-profile > a { color: #b5d9f8; font-size: 13px; }
+.feed-suggestions { position: sticky; top: 40px; padding-top: 17px; }
+.feed-suggestions__intro { display: flex; align-items: center; gap: 13px; margin-bottom: 28px; }
+.feed-impera-avatar { width: 47px; height: 47px; display: grid; place-items: center; border-radius: 50%; background: #b9ec78; color: #122108; font-family: Georgia, serif; font-style: italic; font-size: 29px; font-weight: 700; }
+.feed-suggestions__intro strong { font-size: 14px; font-weight: 600; }
+.feed-suggestions__intro p { color: var(--feed-muted); font-size: 13px; margin: 4px 0 0; }
+.feed-suggestions__title { display: flex; align-items: center; justify-content: space-between; margin-bottom: 17px; }
+.feed-suggestions__title h2 { font-size: 13px; font-weight: 600; color: var(--feed-muted); }
+.feed-suggestions__title a { font-size: 11px; font-weight: 600; }
+.feed-suggestion { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 17px 0; }
+.feed-suggestion > a:first-child { display: flex; gap: 10px; align-items: center; }
+.feed-suggestion .official-avatar { width: 35px; height: 35px; font-size: 11px; }
+.feed-suggestion .official-avatar svg { width: 26px; height: 26px; }
+.feed-suggestion strong { font-size: 12px; font-weight: 600; }
+.feed-suggestion small { display: block; color: var(--feed-muted); font-size: 10px; margin-top: 5px; }
+.feed-suggestion > a:last-child { font-size: 11px; color: #70b5ff; white-space: nowrap; font-weight: 600; }
+.feed-suggestions__footer { margin-top: 32px; font-size: 11px; line-height: 1.8; color: #787878; }
+.feed-suggestions__footer > span { margin: 0 5px; }
+.feed-suggestions__footer p { margin: 6px 0 20px; }
+.feed-suggestions__footer small { font-size: 10px; }
+.feed-empty { text-align: center; padding: 65px 18px; }
+.feed-empty > span { display: grid; place-items: center; width: 70px; height: 70px; border: 1px solid #aaa; border-radius: 50%; margin: 0 auto 22px; }
+.feed-empty > span svg { width: 30px; height: 30px; }
+.feed-empty h2 { font-size: 24px; font-weight: 600; }
+.feed-empty p { font-size: 13px; color: var(--feed-muted); margin: 15px 0 22px; line-height: 1.6; }
+.feed-empty a { font-size: 13px; color: #70b5ff; }
+.feed-end { text-align: center; padding: 28px 0; color: var(--feed-muted); }
+.feed-end > span { display: block; width: fit-content; margin: 0 auto 15px; color: #b9ec78; }
+.feed-end strong { display: block; font-size: 17px; color: #eee; font-weight: 500; }
+.feed-end p { margin-top: 8px; font-size: 12px; }
+.feed-notice { font-size: 12px; color: #e9c17a; line-height: 1.6; margin: 12px 0; }
+.feed-mobile-header, .feed-mobile-nav { display: none; }
+@media (max-width: 1190px) {
+  .feed-sidebar { width: 190px; padding-left: 14px; padding-right: 14px; }
+  .feed-layout { margin-left: 190px; gap: 35px; grid-template-columns: minmax(0, 470px) 245px; padding-left: 25px; padding-right: 25px; }
+  .feed-sidebar nav a { font-size: 14px; gap: 12px; }
+  .feed-suggestion small { max-width: 145px; }
+}
+@media (max-width: 1040px) {
+  .feed-layout { grid-template-columns: minmax(0, 470px); }
+  .feed-suggestions { display: none; }
+}
+@media (max-width: 700px) {
+  .feed-sidebar { display: none; }
+  .feed-mobile-header { position: sticky; top: 0; z-index: 40; display: flex; align-items: center; justify-content: space-between; min-height: 62px; padding: 12px 20px; border-bottom: 1px solid var(--feed-line); background: #090909f5; backdrop-filter: blur(12px); }
+  .feed-mobile-header .feed-wordmark { font-size: 32px; }
+  .feed-mobile-header .home-nav__account { border: 0; padding: 0; font-family: inherit; font-size: 12px; text-transform: none; letter-spacing: normal; color: #efefef; }
+  .feed-layout { margin: 0; display: block; padding: 0 0 85px; }
+  .feed-main { max-width: 470px; margin: auto; }
+  .feed-heading { padding: 20px 16px 16px; margin: 0; }
+  .feed-heading h1 { font-size: 18px; }
+  .feed-heading > span { font-size: 11px; }
+  .feed-stories { padding: 21px 16px; gap: 16px; }
+  .feed-stories button { min-width: 72px; }
+  .feed-post__header { padding: 12px 14px; }
+  .feed-post__media { border-radius: 0; border-left: 0; border-right: 0; }
+  .feed-post__body { padding: 0 14px; }
+  .feed-post { margin-bottom: 10px; }
+  .feed-profile { margin: 0 16px 12px; }
+  .feed-notice { margin: 16px; }
+  .feed-mobile-nav { display: flex; position: fixed; z-index: 50; bottom: 0; left: 0; right: 0; justify-content: space-around; align-items: center; border-top: 1px solid var(--feed-line); padding: 5px 8px calc(5px + env(safe-area-inset-bottom)); background: #090909f5; backdrop-filter: blur(12px); }
+  .feed-mobile-nav > a { display: grid; place-items: center; min-width: 48px; min-height: 45px; }
+  .feed-mobile-nav .official-avatar { width: 27px; height: 27px; font-size: 9px; }
+  .feed-mobile-nav .official-avatar svg { width: 20px; height: 20px; }
+  .feed-mobile-nav [aria-current='page'] { color: #b9ec78; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .feed-sidebar nav a { transition: none; }
+}

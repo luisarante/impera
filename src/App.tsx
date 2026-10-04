@@ -2,6 +2,8 @@ import { Routes, Route } from 'react-router-dom'
 import { lazy, Suspense, type ReactNode } from 'react'
 import ClubDataGate from './components/ClubDataGate'
 import Home from './components/Home'
+import GamePortal from './components/GamePortal'
+import OverwatchPage from './components/OverwatchPage'
 import SquadPage from './components/squad/SquadPage'
 import PlayerPage from './components/squad/PlayerPage'
 import GalleryPage from './components/gallery/GalleryPage'
@@ -50,7 +52,9 @@ export default function App() {
       <Suspense fallback={adminFallback}>
         <Routes>
           {/* Site público */}
-          <Route path="/" element={<Public><Home /></Public>} />
+          <Route path="/" element={<GamePortal />} />
+          <Route path="/eafc" element={<Public><Home /></Public>} />
+          <Route path="/overwatch" element={<OverwatchPage />} />
           <Route path="/elenco" element={<Public><SquadPage /></Public>} />
           <Route path="/elenco/:id" element={<Public><PlayerPage /></Public>} />
           <Route path="/galeria" element={<Public><GalleryPage /></Public>} />

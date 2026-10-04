@@ -53,3 +53,22 @@ Em **Project Settings > API**, copie:
 Coloque esses valores no arquivo `.env.local` do projeto (local) e nas variáveis de
 ambiente da Vercel (produção). A `anon key` é segura para o frontend — quem protege
 as escritas é o RLS + login, configurados no passo 2.
+
+## Expansão EAFC e Overwatch
+
+Antes de publicar esta versão, aplique `migrations/022_news_official_accounts.sql`
+no banco existente pelo SQL Editor do Supabase. Não execute `schema.sql` em um
+banco com conteúdo: ele recria as tabelas.
+
+A migração adiciona `news.official_account`, com `imperafc` como padrão para
+notícias antigas e resumos automáticos de EAFC. O painel de notícias permite
+escolher `imperafc` ou `imperaow`. As permissões de publicação continuam restritas
+aos administradores existentes; estas são identidades editoriais, não novos logins.
+
+Rotas: `/` (portal), `/eafc` (experiência anterior), `/overwatch` (countdown),
+`/noticias` (feed), `/noticias?perfil=imperafc` e `/noticias?perfil=imperaow` (perfis).
+URLs antigas de matérias, elenco, partidas, estatísticas e galeria são preservadas.
+
+O countdown está definido em `src/lib/countdown.ts` para 11/10/2026 às 00:00
+de Brasília (03:00 UTC), e permanece zerado após o prazo.
+Validação: `npm run build` e `node --test scripts/countdown.test.mjs` (Node 24+).

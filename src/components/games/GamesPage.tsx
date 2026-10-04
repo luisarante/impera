@@ -117,7 +117,7 @@ function buildMatchShare(
     if ((m.ourScore as number) > (m.oppScore as number)) head = '🟢 *VITÓRIA DO IMPERATRICE!*'
     else if ((m.ourScore as number) < (m.oppScore as number))
       head = '🔴 *Derrota — mas a Imperatrice volta mais forte.*'
-    else head = '🟡 *Empate valente da Imperatrice.*'
+    else head = '🟡 *Empate valente do Imperatrice.*'
   }
   const scoreLine = `*${clubName} ${m.ourScore ?? '–'} x ${m.oppScore ?? '–'} ${m.opponent}*`
   const comp = m.competition ? `\n_${m.competition}_` : ''
@@ -236,10 +236,10 @@ export default function GamesPage() {
 
   const candidates = data
     ? data.candidateIds
-        .map((pid) => squad.find((p) => p.id === pid))
-        .filter((p): p is NonNullable<typeof p> => Boolean(p))
-        .map((p) => ({ player: p, votes: data.tally[p.id] ?? 0 }))
-        .sort((a, b) => b.votes - a.votes)
+      .map((pid) => squad.find((p) => p.id === pid))
+      .filter((p): p is NonNullable<typeof p> => Boolean(p))
+      .map((p) => ({ player: p, votes: data.tally[p.id] ?? 0 }))
+      .sort((a, b) => b.votes - a.votes)
     : []
 
   // Estado da votação de craque: só aparece na página depois de aberta.
@@ -268,7 +268,7 @@ export default function GamesPage() {
   return (
     <div className="news-page">
       <header className="squad-head">
-        <button type="button" className="squad-back" data-cursor="Voltar" onClick={() => navigate('/')}>
+        <button type="button" className="squad-back" data-cursor="Voltar" onClick={() => navigate('/eafc')}>
           ← Voltar
         </button>
         <div className="squad-title">
@@ -299,11 +299,10 @@ export default function GamesPage() {
                       key={n.id}
                       type="button"
                       onClick={() => navigate(`/jogos/${n.id}`)}
-                      className={`shrink-0 rounded-full border px-4 py-2 text-sm transition-colors ${
-                        active
+                      className={`shrink-0 rounded-full border px-4 py-2 text-sm transition-colors ${active
                           ? 'border-[var(--color-accent)] text-white'
                           : 'border-[var(--hairline)] text-[var(--text-50)] hover:text-white'
-                      }`}
+                        }`}
                     >
                       {n.title}
                     </button>
@@ -469,9 +468,8 @@ export default function GamesPage() {
                           type="button"
                           onClick={() => vote(player.id)}
                           disabled={!votingOpen || voting}
-                          className={`relative w-full overflow-hidden rounded-lg border text-left transition-colors ${
-                            isWinner || mine ? 'border-[var(--color-gold)]' : 'border-[var(--hairline)]'
-                          } ${votingOpen ? 'hover:border-[var(--color-accent)]' : 'cursor-default'}`}
+                          className={`relative w-full overflow-hidden rounded-lg border text-left transition-colors ${isWinner || mine ? 'border-[var(--color-gold)]' : 'border-[var(--hairline)]'
+                            } ${votingOpen ? 'hover:border-[var(--color-accent)]' : 'cursor-default'}`}
                         >
                           <span
                             className="absolute inset-y-0 left-0"
@@ -550,9 +548,8 @@ export default function GamesPage() {
                   <StatTile label="Gols contra" value={summary.goalsAgainst} />
                   <StatTile
                     label="Saldo"
-                    value={`${summary.goalsFor - summary.goalsAgainst >= 0 ? '+' : ''}${
-                      summary.goalsFor - summary.goalsAgainst
-                    }`}
+                    value={`${summary.goalsFor - summary.goalsAgainst >= 0 ? '+' : ''}${summary.goalsFor - summary.goalsAgainst
+                      }`}
                   />
                 </div>
 
@@ -645,11 +642,10 @@ export default function GamesPage() {
                         return (
                           <div className="mt-3 rounded-xl border border-[var(--hairline)] bg-white/[0.02] p-4">
                             <span
-                              className={`inline-block rounded-full px-2 py-0.5 text-[0.62rem] font-semibold uppercase tracking-[0.12em] ${
-                                win
+                              className={`inline-block rounded-full px-2 py-0.5 text-[0.62rem] font-semibold uppercase tracking-[0.12em] ${win
                                   ? 'bg-[color-mix(in_srgb,var(--color-gold)_18%,transparent)] text-[var(--color-gold)]'
                                   : 'bg-[color-mix(in_srgb,var(--color-alert)_18%,transparent)] text-[var(--color-alert)]'
-                              }`}
+                                }`}
                             >
                               {win ? 'Vitória' : 'Derrota'} · saldo {summary.biggestRout.margin}
                             </span>
@@ -692,103 +688,103 @@ export default function GamesPage() {
 
             {/* Partidas / resultados completos — recolhidos numa noite encerrada */}
             {matchesVisible && (
-            <section className="mb-14">
-              <span className="eyebrow" style={{ color: 'var(--color-accent)' }}>
-                Partidas
-              </span>
-              {data.matches.length === 0 ? (
-                <p className="mt-4 text-sm text-[var(--text-50)]">Nenhuma partida cadastrada.</p>
-              ) : (
-                <div className="mt-4 space-y-4">
-                  {data.matches.map((m) => {
-                    // Goleadores da partida (EA sincronizada = contagem; manual = com minuto).
-                    const scorerLines = matchTally(m).scorers.map(({ playerId: pid, goals, minutes }) => {
-                      const name = squad.find((p) => p.id === pid)?.name ?? '—'
-                      const mins = minutes.filter((x) => x != null)
-                      const minsTxt = mins.length ? mins.map((x) => `${x}'`).join(', ') : goals > 1 ? `(${goals})` : ''
-                      return { pid, name, minsTxt }
-                    })
-                    const decided = m.ourScore != null && m.oppScore != null
-                    const ourWin = decided && (m.ourScore as number) > (m.oppScore as number)
-                    const oppWin = decided && (m.oppScore as number) > (m.ourScore as number)
-                    return (
-                      <div
-                        key={m.id}
-                        className="rounded-xl border border-[var(--hairline)] bg-white/[0.02] p-5"
-                      >
-                        <p className="text-center text-[0.7rem] uppercase tracking-[0.16em] text-[var(--text-50)]">
-                          {[m.competition, STATUS_LABEL[m.status]].filter(Boolean).join(' · ')}
-                        </p>
+              <section className="mb-14">
+                <span className="eyebrow" style={{ color: 'var(--color-accent)' }}>
+                  Partidas
+                </span>
+                {data.matches.length === 0 ? (
+                  <p className="mt-4 text-sm text-[var(--text-50)]">Nenhuma partida cadastrada.</p>
+                ) : (
+                  <div className="mt-4 space-y-4">
+                    {data.matches.map((m) => {
+                      // Goleadores da partida (EA sincronizada = contagem; manual = com minuto).
+                      const scorerLines = matchTally(m).scorers.map(({ playerId: pid, goals, minutes }) => {
+                        const name = squad.find((p) => p.id === pid)?.name ?? '—'
+                        const mins = minutes.filter((x) => x != null)
+                        const minsTxt = mins.length ? mins.map((x) => `${x}'`).join(', ') : goals > 1 ? `(${goals})` : ''
+                        return { pid, name, minsTxt }
+                      })
+                      const decided = m.ourScore != null && m.oppScore != null
+                      const ourWin = decided && (m.ourScore as number) > (m.oppScore as number)
+                      const oppWin = decided && (m.oppScore as number) > (m.ourScore as number)
+                      return (
+                        <div
+                          key={m.id}
+                          className="rounded-xl border border-[var(--hairline)] bg-white/[0.02] p-5"
+                        >
+                          <p className="text-center text-[0.7rem] uppercase tracking-[0.16em] text-[var(--text-50)]">
+                            {[m.competition, STATUS_LABEL[m.status]].filter(Boolean).join(' · ')}
+                          </p>
 
-                        <div className="mt-4 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-                          {/* Imperatrice */}
-                          <div className="flex flex-col items-center gap-2 text-center">
-                            <Badge size={44} />
-                            <span className="text-sm font-semibold uppercase leading-tight">
-                              {club.name}
-                            </span>
-                          </div>
-
-                          {/* Placar */}
-                          <div className="px-1 text-center text-3xl font-bold tabular-nums sm:text-4xl">
-                            <span className={ourWin ? 'text-[var(--color-gold)]' : ''}>
-                              {m.ourScore ?? '–'}
-                            </span>
-                            <span className="mx-2 text-[var(--text-30)]">-</span>
-                            <span className={oppWin ? 'text-[var(--color-gold)]' : ''}>
-                              {m.oppScore ?? '–'}
-                            </span>
-                          </div>
-
-                          {/* Adversário */}
-                          <div className="flex flex-col items-center gap-2 text-center">
-                            <span className="flex h-11 w-11 items-center justify-center rounded-full border border-[var(--hairline)] bg-black/40 text-base font-bold uppercase text-[var(--text-70)]">
-                              {m.opponent.charAt(0)}
-                            </span>
-                            <span className="text-sm font-semibold uppercase leading-tight">
-                              {m.opponent}
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="mt-4 border-t border-[var(--hairline)] pt-3">
-                          {scorerLines.length > 0 && (
-                            <div className="grid grid-cols-2 gap-3 text-xs text-[var(--text-70)]">
-                              <div className="space-y-1">
-                                {scorerLines.map((s, i) => (
-                                  <p key={i}>
-                                    <span aria-hidden>⚽ </span>
-                                    {s.name !== '—' ? <PlayerLink id={s.pid} name={s.name} /> : s.name}
-                                    {s.minsTxt ? ` ${s.minsTxt}` : ''}
-                                  </p>
-                                ))}
-                              </div>
-                              <div aria-hidden />
+                          <div className="mt-4 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+                            {/* Imperatrice */}
+                            <div className="flex flex-col items-center gap-2 text-center">
+                              <Badge size={44} />
+                              <span className="text-sm font-semibold uppercase leading-tight">
+                                {club.name}
+                              </span>
                             </div>
-                          )}
-                          <div className={`flex justify-center ${scorerLines.length ? 'mt-3' : ''}`}>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                shareMessage({
-                                  title: 'Imperatrice FC',
-                                  text: buildMatchShare(club.name, m, scorerLines),
-                                  url: `${window.location.origin}/jogos/${data.night.id}`,
-                                })
-                              }
-                              className="inline-flex items-center gap-2 rounded-full bg-[#25D366] px-4 py-2 text-xs font-semibold text-black transition-opacity hover:opacity-90"
-                            >
-                              <WhatsAppIcon />
-                              Compartilhar no WhatsApp
-                            </button>
+
+                            {/* Placar */}
+                            <div className="px-1 text-center text-3xl font-bold tabular-nums sm:text-4xl">
+                              <span className={ourWin ? 'text-[var(--color-gold)]' : ''}>
+                                {m.ourScore ?? '–'}
+                              </span>
+                              <span className="mx-2 text-[var(--text-30)]">-</span>
+                              <span className={oppWin ? 'text-[var(--color-gold)]' : ''}>
+                                {m.oppScore ?? '–'}
+                              </span>
+                            </div>
+
+                            {/* Adversário */}
+                            <div className="flex flex-col items-center gap-2 text-center">
+                              <span className="flex h-11 w-11 items-center justify-center rounded-full border border-[var(--hairline)] bg-black/40 text-base font-bold uppercase text-[var(--text-70)]">
+                                {m.opponent.charAt(0)}
+                              </span>
+                              <span className="text-sm font-semibold uppercase leading-tight">
+                                {m.opponent}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="mt-4 border-t border-[var(--hairline)] pt-3">
+                            {scorerLines.length > 0 && (
+                              <div className="grid grid-cols-2 gap-3 text-xs text-[var(--text-70)]">
+                                <div className="space-y-1">
+                                  {scorerLines.map((s, i) => (
+                                    <p key={i}>
+                                      <span aria-hidden>⚽ </span>
+                                      {s.name !== '—' ? <PlayerLink id={s.pid} name={s.name} /> : s.name}
+                                      {s.minsTxt ? ` ${s.minsTxt}` : ''}
+                                    </p>
+                                  ))}
+                                </div>
+                                <div aria-hidden />
+                              </div>
+                            )}
+                            <div className={`flex justify-center ${scorerLines.length ? 'mt-3' : ''}`}>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  shareMessage({
+                                    title: 'Imperatrice FC',
+                                    text: buildMatchShare(club.name, m, scorerLines),
+                                    url: `${window.location.origin}/jogos/${data.night.id}`,
+                                  })
+                                }
+                                className="inline-flex items-center gap-2 rounded-full bg-[#25D366] px-4 py-2 text-xs font-semibold text-black transition-opacity hover:opacity-90"
+                              >
+                                <WhatsAppIcon />
+                                Compartilhar no WhatsApp
+                              </button>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-            </section>
+                      )
+                    })}
+                  </div>
+                )}
+              </section>
             )}
 
             {/* Eventos */}

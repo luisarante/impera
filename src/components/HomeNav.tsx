@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { lenisScrollToEl } from '../lib/useLenis'
 import { useClubData } from '../lib/data/ClubDataContext'
 import Badge from './ui/Badge'
@@ -14,7 +15,6 @@ import AccountMenu from './account/AccountMenu'
  */
 const LINKS = [
   { id: 'inicio', label: 'Início' },
-  { id: 'noticias', label: 'Notícias' },
   { id: 'pilares', label: 'Pilares' },
   { id: 'jornada', label: 'A Jornada' },
   { id: 'galeria', label: 'Galeria' },
@@ -67,6 +67,7 @@ export default function HomeNav() {
       </button>
 
       <nav className={`home-nav__links${open ? ' is-open' : ''}`}>
+        <Link to="/" className="home-nav__link">Jogos</Link>
         {LINKS.map((l) => (
           <button
             key={l.id}
@@ -77,6 +78,7 @@ export default function HomeNav() {
             {l.label}
           </button>
         ))}
+        <Link to="/noticias" className="home-nav__link">Notícias</Link>
         <AccountMenu />
       </nav>
 

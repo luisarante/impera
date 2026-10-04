@@ -9,6 +9,7 @@
  * Deploy da Vercel.
  */
 import { supabase } from './supabase'
+import type { OfficialAccount } from '../data/officialAccounts'
 
 export interface NewsDraft {
   kicker: string
@@ -51,6 +52,6 @@ export async function requestNightSummary(nightId: string): Promise<void> {
 }
 
 /** Feature B: gera um rascunho de notícia a partir de um briefing (não salva). */
-export async function requestNewsDraft(brief: string): Promise<NewsDraft> {
-  return postJson<NewsDraft>('/api/ai-news-draft', { brief })
+export async function requestNewsDraft(brief: string, officialAccount: OfficialAccount = 'imperafc'): Promise<NewsDraft> {
+  return postJson<NewsDraft>('/api/ai-news-draft', { brief, officialAccount })
 }

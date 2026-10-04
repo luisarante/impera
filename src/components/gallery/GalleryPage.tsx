@@ -13,7 +13,7 @@ export default function GalleryPage() {
   const [active, setActive] = useState<number | null>(null)
   const rootRef = useRef<HTMLDivElement>(null)
 
-  const goBack = useCallback(() => navigate('/'), [navigate])
+  const goBack = useCallback(() => navigate('/eafc'), [navigate])
   const close = useCallback(() => setActive(null), [])
   const next = useCallback(() => setActive((i) => (i === null ? i : (i + 1) % gallery.length)), [])
   const prev = useCallback(

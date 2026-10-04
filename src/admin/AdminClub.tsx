@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { Button, Field, PageHeader, TextInput } from './ui'
+import OverwatchCoverField from './OverwatchCoverField'
 
 interface ClubRow {
   name: string
@@ -56,6 +57,7 @@ export default function AdminClub() {
   return (
     <div className="max-w-2xl">
       <PageHeader title="Clube" />
+      <OverwatchCoverField />
       <div className="space-y-5">
         <Field label="Nome">
           <TextInput value={form.name} onChange={(e) => set('name', e.target.value)} />

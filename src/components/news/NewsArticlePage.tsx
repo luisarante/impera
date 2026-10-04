@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
+import { officialAccounts } from '../../data/officialAccounts'
+import OfficialAvatar from './OfficialAvatar'
 import { useClubData } from '../../lib/data/ClubDataContext'
 import { sanitizeNewsHtml } from '../../lib/sanitize'
 import { linkifyPlayers } from '../../lib/linkifyPlayers'
@@ -20,16 +22,17 @@ function formatDate(iso: string): string {
 export default function NewsArticlePage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { club, news, squad } = useClubData()
+  const { news, squad } = useClubData()
   const article = news.find((n) => n.id === id) ?? null
+  const account = article ? officialAccounts[article.officialAccount] : null
 
   // Nomes de jogadores citados no texto viram links para /elenco/:id.
   const leadHtml = useMemo(
-    () => (article ? linkifyPlayers(sanitizeNewsHtml(article.lead ?? ''), squad) : ''),
+    () => (article ? linkifyPlayers(sanitizeNewsHtml(article.lead ?? ''), article.officialAccount === 'imperafc' ? squad : []) : ''),
     [article, squad],
   )
   const bodyHtml = useMemo(
-    () => (article?.html ? linkifyPlayers(sanitizeNewsHtml(article.html), squad) : ''),
+    () => (article?.html ? linkifyPlayers(sanitizeNewsHtml(article.html), article.officialAccount === 'imperafc' ? squad : []) : ''),
     [article, squad],
   )
 
@@ -70,8 +73,8 @@ export default function NewsArticlePage() {
           ← Notícias
         </button>
         <div className="squad-title">
-          <span className="eyebrow">SilviaNews · {club.name}</span>
-          <h2>Matéria</h2>
+          <span className="eyebrow">Impera · Notícias</span>
+          <h2>Publicação</h2>
         </div>
         <span aria-hidden />
       </header>
@@ -90,6 +93,7 @@ export default function NewsArticlePage() {
         </div>
       ) : (
         <article className="mx-auto w-full max-w-3xl px-[6vw] py-12">
+          {account && <Link to={`/noticias?perfil=${account.handle}`} className="social-post__author mb-6"><OfficialAvatar account={account.handle} /><span>@{account.handle}<small>{account.game} · Conta oficial</small></span><span className="official-check" aria-label="Conta oficial">✓</span></Link>}
           {article.cover && (
             <div className="mb-10 aspect-[16/9] w-full overflow-hidden rounded-xl border border-[var(--hairline)]">
               <img src={article.cover} alt="" className="h-full w-full object-cover" />
@@ -108,7 +112,7 @@ export default function NewsArticlePage() {
             {formatDate(article.publishedAt)}
           </p>
 
-          {article.sourceNightId && (
+          {article.officialAccount === 'imperafc' && article.sourceNightId && (
             <button
               type="button"
               data-cursor="A noite"

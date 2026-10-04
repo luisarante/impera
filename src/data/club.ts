@@ -44,6 +44,7 @@ export interface Player {
 }
 
 export interface NewsItem {
+  officialAccount: import('./officialAccounts').OfficialAccount
   id: string
   kicker: string // chapéu / categoria
   headline: string

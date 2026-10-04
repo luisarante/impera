@@ -110,7 +110,7 @@ export default function StatsPage() {
   return (
     <div className="news-page">
       <header className="squad-head">
-        <button type="button" className="squad-back" data-cursor="Início" onClick={() => navigate('/')}>
+        <button type="button" className="squad-back" data-cursor="Início" onClick={() => navigate('/eafc')}>
           ← Início
         </button>
         <div className="squad-title">

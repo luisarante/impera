@@ -20,7 +20,7 @@ export default function SquadPage() {
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const rootRef = useRef<HTMLDivElement>(null)
 
-  const goBack = useCallback(() => navigate('/'), [navigate])
+  const goBack = useCallback(() => navigate('/eafc'), [navigate])
 
   // Entra no topo da página.
   useEffect(() => {

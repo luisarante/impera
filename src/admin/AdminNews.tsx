@@ -1,12 +1,14 @@
 import { useState } from 'react'
 import { removeImage } from '../lib/supabase'
 import { useTable } from './useTable'
-import { Button, Card, Field, ImageUpload, PageHeader, TextArea, TextInput } from './ui'
+import { Button, Card, Field, ImageUpload, PageHeader, Select, TextArea, TextInput } from './ui'
+import { officialAccounts, resolveOfficialAccount, type OfficialAccount } from '../data/officialAccounts'
 import { useConfirm, useToast } from './feedback'
 import { requestNewsDraft } from '../lib/ai'
 import RichTextEditor from './RichTextEditor'
 
 interface NewsRow {
+  official_account: OfficialAccount
   id: string
   kicker: string
   headline: string
@@ -27,7 +29,8 @@ const blank = (sort_order: number): Partial<NewsRow> => ({
   kicker: '',
   headline: '',
   lead: '',
-  author: 'Redação SilviaNews',
+  author: 'Redação Impera',
+  official_account: 'imperafc',
   published_at: todayIso(),
   cover_path: null,
   content_html: '',
@@ -54,7 +57,7 @@ export default function AdminNews() {
   function openDraft(next: Partial<NewsRow>) {
     setBrief('')
     setAiRev((n) => n + 1)
-    setDraft(next)
+    setDraft({ ...next, official_account: resolveOfficialAccount(next.official_account) })
   }
 
   // Feature B: gera todos os campos a partir de um briefing curto (com revisão humana).
@@ -63,7 +66,7 @@ export default function AdminNews() {
     if (!text) return
     setGenerating(true)
     try {
-      const d = await requestNewsDraft(text)
+      const d = await requestNewsDraft(text, draft?.official_account)
       setDraft((prev) =>
         prev
           ? {
@@ -136,6 +139,11 @@ export default function AdminNews() {
           </Button>
         </Card>
         <div className="space-y-5">
+          <Field label="Publicar pela conta oficial">
+            <Select value={draft.official_account ?? 'imperafc'} onChange={(e) => set('official_account', resolveOfficialAccount(e.target.value))}>
+              {Object.values(officialAccounts).map((account) => <option key={account.handle} value={account.handle}>@{account.handle} — {account.game}</option>)}
+            </Select>
+          </Field>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="Categoria (chapéu)">
               <TextInput value={draft.kicker ?? ''} onChange={(e) => set('kicker', e.target.value)} />
@@ -193,7 +201,7 @@ export default function AdminNews() {
                 checked={draft.featured ?? false}
                 onChange={(e) => set('featured', e.target.checked)}
               />
-              Capa do site (só uma por vez — marcar aqui desmarca a anterior)
+              Post em destaque (só um por vez)
             </label>
           </div>
 
@@ -228,7 +236,7 @@ export default function AdminNews() {
             <div className="min-w-0 flex-1">
               <p className="truncate font-medium">{n.headline}</p>
               <p className="truncate text-xs text-[var(--text-50)]">
-                {n.kicker} · {n.author}
+                @{resolveOfficialAccount(n.official_account)} · {n.kicker} · {n.author}
                 {n.featured ? ' · capa' : ''}
                 {n.published_at ? ` · ${new Date(n.published_at).toLocaleDateString('pt-BR')}` : ''}
               </p>

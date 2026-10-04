@@ -19,6 +19,8 @@ export function useHomeScroll() {
     // Captura o alvo de forma síncrona, antes de o listener de scroll (abaixo)
     // ter chance de sobrescrever com o scrollY = 0 do momento da montagem.
     const target = savedY
+    let restoreRaf = 0
+    let layoutRaf = 0
 
     if (target > 0) {
       const restore = () => {
@@ -29,7 +31,9 @@ export function useHomeScroll() {
         ScrollTrigger.update()
       }
       // rAF duplo: espera o layout (e os ScrollTriggers das seções) assentarem.
-      requestAnimationFrame(() => requestAnimationFrame(restore))
+      layoutRaf = requestAnimationFrame(() => { restoreRaf = requestAnimationFrame(restore) })
+    } else {
+      scrollToInstant(0)
     }
 
     let raf = 0
@@ -44,6 +48,8 @@ export function useHomeScroll() {
     return () => {
       window.removeEventListener('scroll', onScroll)
       cancelAnimationFrame(raf)
+      cancelAnimationFrame(layoutRaf)
+      cancelAnimationFrame(restoreRaf)
     }
   }, [])
 }

@@ -7,7 +7,7 @@
 //
 // Env vars de runtime necessárias na Vercel: SUPABASE_URL, SUPABASE_ANON_KEY.
 
-const SITE_NAME = 'Imperatrice FC'
+const SITE_NAME = 'Impera'
 
 function esc(s) {
   return String(s ?? '')

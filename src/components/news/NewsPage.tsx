@@ -1,140 +1,123 @@
-import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { gsap, prefersReducedMotion } from '../../lib/gsap'
+import { useEffect, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useClubData } from '../../lib/data/ClubDataContext'
-import VerifiedBadge from '../ui/VerifiedBadge'
+import { officialAccounts, type OfficialAccount } from '../../data/officialAccounts'
+import AccountMenu from '../account/AccountMenu'
+import OfficialAvatar from './OfficialAvatar'
+import FeedIcon from './FeedIcon'
+import FeedPost from './FeedPost'
+import '../../styles/news-feed.css'
 
-function formatDate(iso: string): string {
-  if (!iso) return ''
-  const d = new Date(iso)
-  return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString('pt-BR')
+const STORAGE_KEY = 'impera.news.preferences.v1'
+type Preferences = { liked: string[]; saved: string[] }
+
+function readPreferences(): Preferences {
+  try {
+    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}')
+    const strings = (value: unknown): string[] => Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : []
+    return { liked: strings(stored.liked), saved: strings(stored.saved) }
+  } catch {
+    return { liked: [], saved: [] }
+  }
 }
 
-/**
- * PÁGINA DEDICADA DE NOTÍCIAS (/noticias) — hub da SilviaNews.
- * A matéria-capa (featured) abre o topo; as demais vêm numa grade, da mais
- * recente para a mais antiga. Clicar abre o painel de leitura (GlassPanel).
- */
 export default function NewsPage() {
-  const navigate = useNavigate()
-  const { news, club } = useClubData()
-  const rootRef = useRef<HTMLDivElement>(null)
+  const { news } = useClubData()
+  const [params, setParams] = useSearchParams()
+  const [preferences, setPreferences] = useState(readPreferences)
+  const [storageMessage, setStorageMessage] = useState('')
+  const requested = params.get('perfil')
+  const selected = requested === 'imperafc' || requested === 'imperaow' ? requested : null
+  const savedOnly = params.get('aba') === 'salvos'
+  const profile = selected ? officialAccounts[selected] : null
+  const posts = news.filter((post) => (!selected || post.officialAccount === selected) && (!savedOnly || preferences.saved.includes(post.id)))
 
-  const goBack = useCallback(() => navigate('/'), [navigate])
+  useEffect(() => { window.scrollTo(0, 0) }, [selected, savedOnly])
 
-  useEffect(() => {
-    window.scrollTo(0, 0)
-  }, [])
-
-  // Esc volta para a home.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') goBack()
+  function togglePreference(kind: keyof Preferences, id: string) {
+    const values = preferences[kind]
+    const next = { ...preferences, [kind]: values.includes(id) ? values.filter((value) => value !== id) : [...values, id] }
+    setPreferences(next)
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+      setStorageMessage('')
+    } catch {
+      setStorageMessage('O navegador não permitiu salvar. Suas escolhas ficarão disponíveis apenas nesta sessão.')
     }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [goBack])
+  }
 
-  useLayoutEffect(() => {
-    if (prefersReducedMotion() || !rootRef.current) return
-    const ctx = gsap.context(() => {
-      gsap.from('[data-anim="head"]', { y: -24, opacity: 0, duration: 0.5, ease: 'power3.out' })
-      gsap.from('.news-cover', { opacity: 0, y: 24, duration: 0.55, ease: 'power3.out' })
-      gsap.from('.news-card', {
-        opacity: 0,
-        y: 24,
-        duration: 0.5,
-        ease: 'power3.out',
-        stagger: 0.06,
-        delay: 0.1,
-      })
-    }, rootRef)
-    return () => ctx.revert()
-  }, [])
-
-  const cover = news.find((n) => n.featured) ?? news[0] ?? null
-  const rest = cover ? news.filter((n) => n.id !== cover.id) : news
+  function selectProfile(account: OfficialAccount | null) {
+    setParams(account ? { perfil: account } : {})
+  }
 
   return (
-    <div ref={rootRef} className="news-page" aria-label="Notícias do Imperatrice FC">
-      <header className="squad-head" data-anim="head">
-        <button type="button" className="squad-back" data-cursor="Voltar" onClick={goBack}>
-          ← Voltar
-        </button>
-        <div className="squad-title">
-          <span className="eyebrow">SilviaNews · {club.name}</span>
-          <h2>Notícias</h2>
+    <div className="instagram-page">
+      <aside className="feed-sidebar" aria-label="Navegação do feed">
+        <Link to="/" className="feed-wordmark">impera<span>↗</span></Link>
+        <nav>
+          <Link to="/noticias" className={!savedOnly && !selected ? 'is-active' : ''} aria-current={!savedOnly && !selected ? 'page' : undefined}><FeedIcon name="home" /><span>Página inicial</span></Link>
+          <Link to="/noticias?aba=salvos" className={savedOnly ? 'is-active' : ''} aria-current={savedOnly ? 'page' : undefined}><FeedIcon name="bookmark" /><span>Salvos</span></Link>
+          <Link to="/"><FeedIcon name="game" /><span>Nossos jogos</span></Link>
+        </nav>
+        <div className="feed-sidebar__accounts"><span>CONTAS OFICIAIS</span>
+          {Object.values(officialAccounts).map((account) => (
+            <Link key={account.handle} to={`/noticias?perfil=${account.handle}`} className={selected === account.handle ? 'is-active' : ''}><OfficialAvatar account={account.handle} /><span>{account.handle}</span></Link>
+          ))}
         </div>
-        <span className="gallery-count">{news.length} matérias</span>
-      </header>
+        <div className="feed-sidebar__bottom"><AccountMenu /><p>Dois jogos. A mesma paixão.</p><Link to="/">← Voltar ao site</Link></div>
+      </aside>
 
-      {news.length === 0 ? (
-        <p className="news-empty">Nenhuma notícia publicada ainda.</p>
-      ) : (
-        <div className="news-hub">
-          {cover && (
-            <article
-              className="news-cover"
-              data-cursor="Ler matéria"
-              onClick={() => navigate(`/noticias/${cover.id}`)}
-            >
-              <div className="news-cover__media">
-                {cover.cover ? (
-                  <img src={cover.cover} alt="" />
-                ) : (
-                  <div className="news-hero-img absolute inset-0" />
-                )}
-                <span className="news-badge">Capa</span>
-              </div>
-              <div className="news-cover__body">
-                <span className="eyebrow" style={{ color: 'var(--color-accent)' }}>
-                  {cover.kicker}
-                </span>
-                <h3>{cover.headline}</h3>
-                <p className="news-cover__lead">{cover.lead}</p>
-                <p className="news-meta">
-                  {cover.author}
-                  {cover.author && cover.publishedAt ? ' · ' : ''}
-                  {formatDate(cover.publishedAt)}
-                </p>
-                {cover.verified && <VerifiedBadge />}
-              </div>
-            </article>
+      <header className="feed-mobile-header"><Link to="/" className="feed-wordmark">impera<span>↗</span></Link><AccountMenu /></header>
+
+      <div className="feed-layout">
+        <main className="feed-main">
+          <header className="feed-heading">
+            <h1>{savedOnly ? 'Salvos' : profile ? `@${profile.handle}` : 'Seu feed'}</h1>
+            <span>{savedOnly ? 'Neste navegador' : 'Mais recentes'}</span>
+          </header>
+
+          {!savedOnly && <nav className="feed-stories" aria-label="Filtrar por conta oficial">
+            <button type="button" onClick={() => selectProfile(null)} aria-pressed={!selected} className={!selected ? 'is-active' : ''}><span className="feed-story-ring feed-story-ring--all"><span className="feed-story-all"><FeedIcon name="grid" /></span></span><span>Todos</span></button>
+            {Object.values(officialAccounts).map((account) => (
+              <button type="button" key={account.handle} onClick={() => selectProfile(account.handle)} aria-pressed={selected === account.handle} className={selected === account.handle ? 'is-active' : ''}><span className={`feed-story-ring feed-story-ring--${account.handle}`}><OfficialAvatar account={account.handle} large /></span><span>{account.handle}</span></button>
+            ))}
+          </nav>}
+
+          {profile && selected && (
+            <section className="feed-profile" aria-label={`Perfil @${profile.handle}`}>
+              <div className="feed-profile__top"><OfficialAvatar account={selected} large /><div><h2>{profile.handle} <span className="feed-verified" aria-label="Conta oficial"><FeedIcon name="check" filled /></span></h2><p><strong>{posts.length}</strong> publicações</p><span>{profile.game} · Conta oficial</span></div></div>
+              <h3>{profile.name}</h3><p>{profile.bio}</p><Link to={profile.path}>Página de {profile.game} ↗</Link>
+            </section>
           )}
 
-          <div className="news-grid">
-            {rest.map((n) => (
-              <article
-                key={n.id}
-                className="news-card"
-                data-cursor="Ler matéria"
-                onClick={() => navigate(`/noticias/${n.id}`)}
-              >
-                <div className="news-card__media">
-                  {n.cover ? (
-                    <img src={n.cover} alt="" />
-                  ) : (
-                    <div className="news-hero-img absolute inset-0" />
-                  )}
-                </div>
-                <div className="news-card__body">
-                  <span className="eyebrow" style={{ color: 'var(--color-accent)' }}>
-                    {n.kicker}
-                  </span>
-                  <h4>{n.headline}</h4>
-                  <p className="news-card__lead">{n.lead}</p>
-                  <p className="news-meta mt-auto">
-                    {n.author}
-                    {n.author && n.publishedAt ? ' · ' : ''}
-                    {formatDate(n.publishedAt)}
-                  </p>
-                  {n.verified && <VerifiedBadge />}
-                </div>
-              </article>
-            ))}
-          </div>
-        </div>
-      )}
+          {storageMessage && <p className="feed-notice" role="status">{storageMessage}</p>}
+          {posts.length === 0 ? (
+            <section className="feed-empty"><span><FeedIcon name={savedOnly ? 'bookmark' : 'grid'} /></span><h2>{savedOnly ? 'Guarde o que vale rever' : 'Ainda sem publicações'}</h2><p>{savedOnly ? 'Toque no marcador de uma publicação para encontrá-la aqui. Seus salvos ficam neste navegador.' : `As novidades de @${profile?.handle ?? 'impera'} vão aparecer aqui.`}</p><Link to="/noticias">Explorar o feed</Link></section>
+          ) : (
+            <div className="feed-posts">
+              {posts.map((post) => <FeedPost key={post.id} post={post} liked={preferences.liked.includes(post.id)} saved={preferences.saved.includes(post.id)} onLike={() => togglePreference('liked', post.id)} onSave={() => togglePreference('saved', post.id)} />)}
+              <div className="feed-end"><span><FeedIcon name="check" /></span><strong>Você está em dia</strong><p>Essas são todas as publicações {savedOnly ? 'salvas por você' : profile ? `de @${profile.handle}` : 'do Impera'}.</p></div>
+            </div>
+          )}
+        </main>
+
+        <aside className="feed-suggestions" aria-label="Contas oficiais do Impera">
+          <div className="feed-suggestions__intro"><span className="feed-impera-avatar">i↗</span><div><strong>O universo Impera</strong><p>EAFC & Overwatch</p></div></div>
+          <div className="feed-suggestions__title"><h2>Contas para acompanhar</h2><Link to="/noticias">Ver todas</Link></div>
+          {Object.values(officialAccounts).map((account) => (
+            <div className="feed-suggestion" key={account.handle}><Link to={`/noticias?perfil=${account.handle}`}><OfficialAvatar account={account.handle} /><span><strong>{account.handle} <span className="feed-verified" aria-label="Conta oficial"><FeedIcon name="check" filled /></span></strong><small>{account.name} · {account.game}</small></span></Link><Link to={`/noticias?perfil=${account.handle}`} aria-label={`Ver perfil @${account.handle}`}>Ver perfil</Link></div>
+          ))}
+          <div className="feed-suggestions__footer"><Link to="/">Sobre o Impera</Link><span>·</span><Link to="/eafc">EAFC</Link><span>·</span><Link to="/overwatch">Overwatch</Link><p>Notícias e bastidores. Dentro e fora do jogo.</p><small>© {new Date().getFullYear()} IMPERA</small></div>
+        </aside>
+      </div>
+
+      <nav className="feed-mobile-nav" aria-label="Navegação móvel">
+        <Link to="/noticias" aria-label="Feed" aria-current={!savedOnly && !selected ? 'page' : undefined}><FeedIcon name="home" /></Link>
+        <Link to="/" aria-label="Nossos jogos"><FeedIcon name="game" /></Link>
+        <Link to="/noticias?aba=salvos" aria-label="Salvos" aria-current={savedOnly ? 'page' : undefined}><FeedIcon name="bookmark" filled={savedOnly} /></Link>
+        <Link to="/noticias?perfil=imperafc" aria-label="Perfil @imperafc"><OfficialAvatar account="imperafc" /></Link>
+        <Link to="/noticias?perfil=imperaow" aria-label="Perfil @imperaow"><OfficialAvatar account="imperaow" /></Link>
+      </nav>
     </div>
   )
 }

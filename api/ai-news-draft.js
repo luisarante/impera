@@ -42,11 +42,13 @@ export default async function handler(req, res) {
   try {
     await requireAdmin(req)
 
-    const brief = String(readBody(req).brief ?? '').trim()
+    const body = readBody(req)
+    const brief = String(body.brief ?? '').trim()
+    const account = body.officialAccount === 'imperaow' ? '@imperaow (Overwatch)' : '@imperafc (EAFC)'
     if (!brief) return res.status(400).json({ error: 'Informe um briefing do que a notícia deve tratar.' })
 
     const draft = await generateStructured({
-      system: SYSTEM,
+      system: `${SYSTEM}\nEsta publicação pertence à conta oficial ${account}. Use o vocabulário do jogo dessa conta; não misture modalidades.`,
       prompt: `Briefing do que a notícia deve tratar:\n\n${brief}\n\nGere a notícia estruturada a partir apenas desse briefing.`,
       schema: NEWS_SCHEMA,
     })

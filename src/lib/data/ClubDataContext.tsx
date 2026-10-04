@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
 import { supabase, publicImageUrl } from '../supabase'
+import { resolveOfficialAccount } from '../../data/officialAccounts'
 import type {
   BigNumber,
   Club,
@@ -52,6 +53,7 @@ function mapPlayer(row: Record<string, unknown>): Player {
 
 function mapNews(row: Record<string, unknown>): NewsItem {
   return {
+    officialAccount: resolveOfficialAccount(row.official_account),
     id: row.id as string,
     kicker: row.kicker as string,
     headline: row.headline as string,
